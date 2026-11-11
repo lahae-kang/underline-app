@@ -219,7 +219,13 @@ input, textarea { font: inherit; color: var(--fg); }
   const imgCache = new Map();
   function cachedImg(src) { if (!imgCache.has(src)) imgCache.set(src, loadImg(src)); return imgCache.get(src); }
 
-  async function shrink(file, max) {
+  // small files: WebP (quality .7) where the browser can write it, otherwise JPEG
+  async function encode(canvas, q = 0.7) {
+    const webp = await new Promise(r => canvas.toBlob(r, "image/webp", q));
+    if (webp && webp.type === "image/webp") return webp;
+    return await new Promise(r => canvas.toBlob(r, "image/jpeg", Math.min(0.85, q + 0.1)));
+  }
+  async function shrink(file, max, opts = {}) {
     const url = URL.createObjectURL(file);
     try {
       const img = await loadImg(url);
@@ -227,10 +233,12 @@ input, textarea { font: inherit; color: var(--fg); }
       const w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
       const c = document.createElement("canvas"); c.width = w; c.height = h;
       c.getContext("2d").drawImage(img, 0, 0, w, h);
-      const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.82));
+      const blob = opts.jpeg ? await new Promise(r => c.toBlob(r, "image/jpeg", 0.9)) : await encode(c, 0.7);
       return { blob, w, h };
     } finally { URL.revokeObjectURL(url); }
   }
+  // sharper copy kept only in memory, for reading text right after a photo is added
+  const hiRes = new Map();
   const blobToDataURL = (b) => new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); });
 
   /* ---------- stroke drawing (coords normalized 0..1 to image) ---------- */
@@ -345,6 +353,26 @@ input, textarea { font: inherit; color: var(--fg); }
   // a name becomes a hidden e-mail address so any language works as a login name
   const nameToEmail = (name) => "u" + Array.from(new TextEncoder().encode(name.trim().toLowerCase())).map(b => b.toString(16).padStart(2, "0")).join("") + "@users.underline-app.com";
 
+  // photos downloaded once stay on the phone (IndexedDB), so they are not fetched again
+  const photoCache = (() => {
+    let dbp = null;
+    const open = () => dbp || (dbp = new Promise((res, rej) => {
+      if (!window.indexedDB) return rej(new Error("no idb"));
+      const r = indexedDB.open("underline-cache", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("img");
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    }));
+    const run = (mode, fn) => open().then(d => new Promise((res, rej) => {
+      const t = d.transaction("img", mode), q = fn(t.objectStore("img"));
+      t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error);
+    }));
+    return {
+      get: (k) => run("readonly", st => st.get(k)).catch(() => null),
+      put: (k, blob) => run("readwrite", st => st.put(blob, k)).catch(() => {}),
+      del: (k) => run("readwrite", st => st.delete(k)).catch(() => {})
+    };
+  })();
+
   function cloudStore(uid) {
     const nid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
     const blobUrls = new Map();
@@ -367,18 +395,22 @@ input, textarea { font: inherit; color: var(--fg); }
     return {
       remote: true,
       subscribe(f, onErr) { cb = f; emit().catch(e => onErr && onErr(e)); },
-      async upload(blob) {
-        const key = uid + "/" + nid() + ".jpg";
-        must(await sb.storage.from("photos").upload(key, blob, { contentType: "image/jpeg", upsert: false }));
+      async upload(blob, kind) {
+        const type = blob.type || "image/jpeg", ext = type === "image/webp" ? ".webp" : ".jpg";
+        const pre = kind === "page" ? "p2-" : kind === "crop" ? "p2c-" : kind === "cover" ? "c2-" : "";
+        const key = uid + "/" + pre + nid() + ext;
+        must(await sb.storage.from("photos").upload(key, blob, { contentType: type, upsert: false }));
         const url = URL.createObjectURL(blob); blobUrls.set(key, url);
+        photoCache.put(key, blob);
         return { id: "sb:" + key, url };
       },
       async readImage(key) {
         if (blobUrls.has(key)) return blobUrls.get(key);
-        const blob = must(await sb.storage.from("photos").download(key));
+        let blob = await photoCache.get(key);
+        if (!blob) { blob = must(await sb.storage.from("photos").download(key)); photoCache.put(key, blob); }
         const url = URL.createObjectURL(blob); blobUrls.set(key, url); return url;
       },
-      async deleteImage(id) { const k = path(id); if (k) { try { await sb.storage.from("photos").remove([k]); } catch {} } },
+      async deleteImage(id) { const k = path(id); if (k) { photoCache.del(k); try { await sb.storage.from("photos").remove([k]); } catch {} } },
       async addBook(d) { const r = must(await sb.from("books").insert(bookOut(d)).select("id").single()); await emit(); return r.id; },
       async updateBook(id, d) { must(await sb.from("books").update(bookOut(d)).eq("id", id)); await emit(); },
       async deleteBook(id) {
@@ -644,7 +676,7 @@ input, textarea { font: inherit; color: var(--fg); }
       (el) => {
         $("#cover-file", el).addEventListener("change", async (e) => {
           const f = e.target.files[0]; if (!f) return;
-          try { const r = await shrink(f, 900); coverBlob = r.blob; $("#cv", el).innerHTML = `<img src="${URL.createObjectURL(r.blob)}" alt="">`; } catch { toast("사진을 읽지 못했어요."); }
+          try { const r = await shrink(f, 600); coverBlob = r.blob; $("#cv", el).innerHTML = `<img src="${URL.createObjectURL(r.blob)}" alt="">`; } catch { toast("사진을 읽지 못했어요."); }
         });
         $("#bsave", el).addEventListener("click", async () => {
           const title = $("#bt", el).value.trim(), author = $("#ba", el).value.trim();
@@ -652,7 +684,7 @@ input, textarea { font: inherit; color: var(--fg); }
           busy(true);
           try {
             const d = { title, author };
-            if (coverBlob) { const up = await store.upload(coverBlob); d.coverId = up.id; d.coverUrl = up.id ? "" : up.url; }
+            if (coverBlob) { const up = await store.upload(coverBlob, "cover"); d.coverId = up.id; d.coverUrl = up.id ? "" : up.url; }
             if (editing) { await store.updateBook(book.id, d); toast("책 정보를 고쳤어요."); if (S.bookTab === "shared" || S.shared) loadShared(book.id); }
             else { d.createdAt = Date.now(); const id = await store.addBook(d); S.view = "book"; S.bookId = id; toast("책장에 꽂았어요."); }
             closeSheet(); render(); window.scrollTo(0, 0);
@@ -684,9 +716,10 @@ input, textarea { font: inherit; color: var(--fg); }
   async function addPageFromFile(file) {
     busy(true, "사진을 올리는 중…");
     try {
-      const r = await shrink(file, 1600);
-      const up = await store.upload(r.blob);
+      const [r, hi] = await Promise.all([shrink(file, 1200), shrink(file, 2000, { jpeg: true }).catch(() => null)]);
+      const up = await store.upload(r.blob, "page");
       const id = await store.addPage({ bookId: S.bookId, imageId: up.id, imageUrl: up.id ? "" : up.url, w: r.w, h: r.h, strokes: [], pageNo: "", quote: "", note: "", createdAt: Date.now() });
+      if (hi) hiRes.set(id, URL.createObjectURL(hi.blob));
       busy(false);
       openEditor(id, { imageId: up.id, url: up.url, w: r.w, h: r.h, strokes: [], pageNo: "", quote: "", note: "", bookId: S.bookId, fresh: true });
     } catch (e) { console.warn("add page failed", e); busy(false); toast(errMsg(e)); }
@@ -833,7 +866,7 @@ input, textarea { font: inherit; color: var(--fg); }
       await store.updatePage(id, d); ED.dirty = false; closeEditor(true);
       if (S.shared && S.shared.bookId === S.bookId && "shared" in d) loadShared(S.bookId);
       toast(runOcr ? "저장했어요. 밑줄 문장을 글자로 옮기고 있어요." : "밑줄을 저장했어요.");
-      if (runOcr) readUnderline(id, page);
+      if (runOcr) readUnderline(id, page).then(() => cropToMarks(id));
     }
     catch (e) { toast(errMsg(e)); } finally { busy(false); }
   }
@@ -886,7 +919,7 @@ input, textarea { font: inherit; color: var(--fg); }
   }
   async function readUnderline(id, page) {
     try {
-      const bmp = await loadBitmap(page.imageUrl);
+      const bmp = await loadBitmap(hiRes.get(id) || page.imageUrl);
       const strips = page.strokes.map(s => stripCanvas(bmp, s)).sort((a, b) => a.y - b.y || a.x - b.x);
       let out = "", prevY = null;
       for (const st of strips) {
@@ -901,6 +934,33 @@ input, textarea { font: inherit; color: var(--fg); }
       try { await store.updatePage(id, { ocr: "failed" }); } catch {}
     }
   }
+  // after reading, keep only the band of the page around the highlights (full width),
+  // move the strokes onto the smaller photo, and delete the full page photo
+  async function cropToMarks(id) {
+    try {
+      const p = S.pages.find(p => p.id === id);
+      if (!p || !store.remote || !p.imageId || !/\/p2c?-/.test(p.imageId) || !(p.strokes || []).length) return;
+      if (ED.el && ED.id === id) return; // being edited again; the next save will do it
+      const img = await loadImg(await resolveSrc(p.imageId, p.imageUrl));
+      const W = img.naturalWidth, H = img.naturalHeight;
+      let lo = 1, hi = 0;
+      for (const st of p.strokes) for (let i = 1; i < st.p.length; i += 2) { lo = Math.min(lo, st.p[i]); hi = Math.max(hi, st.p[i]); }
+      const lh = Math.max(14, W * 0.032);
+      const top = Math.max(0, Math.floor(lo * H - lh * 1.8)), bot = Math.min(H, Math.ceil(hi * H + lh * 1.8));
+      if (bot - top > H * 0.85) return; // nothing much to save
+      const c = document.createElement("canvas"); c.width = W; c.height = bot - top;
+      c.getContext("2d").drawImage(img, 0, top, W, bot - top, 0, 0, W, bot - top);
+      const blob = await encode(c, 0.7);
+      const up = await store.upload(blob, "crop");
+      const span = bot - top, r4 = (v) => Math.round(v * 10000) / 10000;
+      const strokes = p.strokes.map(st => ({ ...st, p: st.p.map((v, i) => i % 2 ? r4((v * H - top) / span) : v) }));
+      const old = p.imageId;
+      await store.updatePage(id, { imageId: up.id, w: W, h: span, strokes });
+      await store.deleteImage(old);
+      if (hiRes.has(id)) { URL.revokeObjectURL(hiRes.get(id)); hiRes.delete(id); }
+    } catch (e) { console.warn("crop failed", e); }
+  }
+
   // cover: take the line written in the biggest letters as the title
   async function readCover(id, blob) {
     try {
@@ -922,8 +982,8 @@ input, textarea { font: inherit; color: var(--fg); }
   async function addBookFromFile(file) {
     busy(true, "표지를 올리는 중…");
     try {
-      const r = await shrink(file, 900);
-      const up = await store.upload(r.blob);
+      const r = await shrink(file, 600);
+      const up = await store.upload(r.blob, "cover");
       const d = { title: "", coverId: up.id, coverUrl: up.id ? "" : up.url, createdAt: Date.now() };
       if (sampleFn) d.ocr = "pending";
       const id = await store.addBook(d);
