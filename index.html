@@ -72,7 +72,8 @@ input, textarea { font: inherit; color: var(--fg); }
 .book-link { text-align: left; display: grid; gap: 2px; min-width: 0; }
 .book-count { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .add-chip { position: absolute; right: 5px; bottom: 5px; width: 30px; height: 30px; border-radius: 50%; background: var(--fg); color: var(--ink-inv); pointer-events: none; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
-.add-chip svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.add-chip { overflow: hidden; }
+.add-chip svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 
 /* Empty state */
 .empty { text-align: center; padding: 56px 12px 24px; display: grid; gap: 14px; justify-items: center; }
@@ -990,7 +991,7 @@ button.cover { padding: 0; cursor: pointer; }
   function plusIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`; }
   function cameraIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`; }
   // cover button: a highlighter stroke across the top-left, camera tucked bottom-right
-  function markCameraIcon() { return `<svg viewBox="0 0 30 30" aria-hidden="true"><path d="M-3 10.5 L14 7.5" stroke="#ffd600" stroke-width="4.5" stroke-linecap="round" opacity=".95"/><g transform="translate(11.5 11) scale(.7)" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></g></svg>`; }
+  function markCameraIcon() { return `<svg viewBox="0 0 30 30" aria-hidden="true"><path d="M6 10.5 L15 8.5" stroke="#ffd600" stroke-width="3" stroke-linecap="round"/><g transform="translate(11 11) scale(.68)" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></g></svg>`; }
   function backIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>`; }
   function dotsIcon() { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>`; }
   function undoIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6L4 11l5 5"/><path d="M4 11h10a5 5 0 010 10h-3"/></svg>`; }
