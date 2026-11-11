@@ -189,6 +189,15 @@ input, textarea { font: inherit; color: var(--fg); }
 .switch-input:checked::after { transform: translateX(18px); }
 .switch-input:disabled { opacity: .4; cursor: not-allowed; }
 .terms { display: grid; gap: 10px; font-size: 14px; color: var(--fg); padding-left: 18px; margin: 0; }
+.title-btn { font: inherit; text-align: left; letter-spacing: inherit; }
+.title-btn::after { content: "✎"; font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+button.cover { padding: 0; cursor: pointer; }
+.book-head .count2 { margin-top: 2px; color: var(--muted); }
+.cover-big { width: min(220px, 60%); margin: 0 auto; }
+.ed-actions { display: flex; gap: 6px; }
+.colors { gap: 10px; align-items: center; }
+.color-dot { width: 30px; height: 30px; border-radius: 50%; background: var(--dot); border: 2px solid var(--bg); box-shadow: 0 0 0 1.5px var(--line); }
+.color-dot[aria-checked="true"] { box-shadow: 0 0 0 2px var(--fg); }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 92px); background: var(--fg); color: var(--ink-inv); padding: 10px 16px; border-radius: 999px; font-size: 13.5px; z-index: 60; max-width: calc(100% - 32px); text-align: center; }
 .loading { text-align: center; color: var(--muted); padding: 60px 0; font-size: 14px; }
 .busy { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.35); display: grid; place-items: center; }
@@ -200,7 +209,6 @@ input, textarea { font: inherit; color: var(--fg); }
 <div class="app" id="app"><div class="loading">서재를 여는 중…</div></div>
 <div id="layer"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 (() => {
@@ -237,17 +245,23 @@ input, textarea { font: inherit; color: var(--fg); }
       return { blob, w, h };
     } finally { URL.revokeObjectURL(url); }
   }
-  // sharper copy kept only in memory, for reading text right after a photo is added
-  const hiRes = new Map();
+
   const blobToDataURL = (b) => new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); });
 
   /* ---------- stroke drawing (coords normalized 0..1 to image) ---------- */
+  const MARK_COLORS = {
+    y: { name: "노랑", ink: "rgba(255,214,0,.45)", css: "#ffd600" },
+    g: { name: "초록", ink: "rgba(70,215,110,.40)", css: "#46d76e" },
+    p: { name: "분홍", ink: "rgba(255,105,180,.38)", css: "#ff69b4" },
+    b: { name: "하늘", ink: "rgba(70,165,255,.38)", css: "#46a5ff" },
+    o: { name: "주황", ink: "rgba(255,145,40,.42)", css: "#ff9128" }
+  };
   function drawStrokes(ctx, strokes, W, H, y0 = 0, ySpan = 1) {
     for (const s of strokes || []) {
       const p = s.p; if (!p || p.length < 4) continue;
       ctx.save();
       ctx.lineCap = "round"; ctx.lineJoin = "round";
-      if (s.t === "mark") { ctx.strokeStyle = "rgba(255,214,0,.45)"; ctx.lineWidth = Math.max(8, W * 0.032); ctx.globalCompositeOperation = "multiply"; }
+      if (s.t === "mark") { ctx.strokeStyle = (MARK_COLORS[s.c] || MARK_COLORS.y).ink; ctx.lineWidth = Math.max(8, W * 0.032); ctx.globalCompositeOperation = "multiply"; }
       else { ctx.strokeStyle = "#111"; ctx.lineWidth = Math.max(2, W * 0.0045); }
       ctx.beginPath();
       for (let i = 0; i < p.length; i += 2) {
@@ -469,7 +483,7 @@ input, textarea { font: inherit; color: var(--fg); }
       resolveSrc(img.dataset.img, img.dataset.url).then(src => { if (src) img.src = src; }).catch(() => {});
     });
   }
-  const titleOf = (b) => (b && b.title) || (b && b.ocr === "pending" ? "제목 읽는 중…" : "제목 없는 책");
+  const titleOf = (b) => (b && b.title) || "제목 없는 책";
   const fmtDate = (t) => { if (!t) return ""; const d = new Date(t); return d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0"); };
   const markCount = (p) => (p.strokes || []).length;
 
@@ -481,7 +495,7 @@ input, textarea { font: inherit; color: var(--fg); }
     let h = header(`
       <div class="top-row">
         <div class="brand">_밑줄.</div>
-        ${S.user ? `<span class="acct">${esc(S.user)} <label class="acct-link file-btn">백업 가져오기<input type="file" accept="application/json,.json" data-file="backup"></label> <button data-act="logout">로그아웃</button></span>` : ""}
+        ${S.user ? `<span class="acct">${esc(S.user)} <button data-act="logout">로그아웃</button></span>` : ""}
       </div>
       <nav class="tabs" role="tablist">
         <button class="tab" role="tab" data-act="tab" data-tab="books" aria-selected="${S.tab === "books"}">책장</button>
@@ -505,12 +519,12 @@ input, textarea { font: inherit; color: var(--fg); }
         <label class="btn file-btn" style="margin-top:10px">${cameraIcon()} 첫 책 등록하기<input type="file" accept="image/*" data-file="cover"></label>
       </section>`;
     }
-    h += `<div class="section-label"><span>책장</span><span>최근 등록순</span></div><div class="grid">`;
+    h += `<div class="grid" style="margin-top:20px">`;
     for (const b of books) {
       const n = pagesOf(b.id).length;
       h += `<div class="book">
         <label class="cover file-btn" aria-label="${esc(titleOf(b))}에 밑줄 페이지 추가">${hasCover(b) ? coverImg(b) : `<span class="ph">${esc(titleOf(b))}</span>`}<span class="add-chip">${cameraIcon()}</span><input type="file" accept="image/*" data-file="page" data-book="${esc(b.id)}"></label>
-        <button class="book-link" data-act="open-book" data-id="${esc(b.id)}"><span class="book-title">${esc(titleOf(b))}</span><span class="book-count">밑줄 ${n}쪽 ›</span></button>
+        <button class="book-link" data-act="open-book" data-id="${esc(b.id)}"><span class="book-title">${esc(titleOf(b))}</span></button>
       </div>`;
     }
     h += `</div><label class="fab file-btn">${plusIcon()} 책 등록<input type="file" accept="image/*" data-file="cover"></label>`;
@@ -534,8 +548,6 @@ input, textarea { font: inherit; color: var(--fg); }
     return `<button class="card" data-act="edit-page" data-id="${esc(p.id)}">
       ${meta}
       <canvas data-crop="${esc(p.id)}" aria-label="밑줄 그은 부분"></canvas>
-      ${p.ocr === "pending" ? `<span class="reading">밑줄 문장을 글자로 옮기는 중…</span>` : ""}
-      ${p.ocr === "failed" && !p.quote ? `<span class="nomark">글자를 읽지 못했어요 · 눌러서 직접 적을 수 있어요</span>` : ""}
       ${quoteHTML}
       ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
       ${markCount(p) ? "" : `<span class="nomark">아직 밑줄이 없어요 · 눌러서 긋기</span>`}
@@ -559,8 +571,8 @@ input, textarea { font: inherit; color: var(--fg); }
     const tab = S.bookTab || "mine";
     let h = header(`<div class="top-row"><button class="back" data-act="home">${backIcon()} 책장</button><button class="icon-btn" data-act="book-menu" aria-label="책 관리">${dotsIcon()}</button></div>`);
     h += `<section class="book-head">
-      <div class="cover">${hasCover(b) ? coverImg(b) : `<span class="ph" style="font-size:12px">${esc(titleOf(b))}</span>`}</div>
-      <div><h1>${esc(titleOf(b))}</h1>${b.ocr === "pending" ? `<div class="meta">표지에서 제목을 읽는 중…</div>` : (b.author ? `<div class="meta">${esc(b.author)}</div>` : "")}<div class="count">밑줄 페이지 ${ps.length}쪽 · ${fmtDate(b.createdAt)} 등록</div></div>
+      <button class="cover" data-act="edit-title" aria-label="표지 보고 제목 고치기">${hasCover(b) ? coverImg(b) : `<span class="ph" style="font-size:12px">${esc(titleOf(b))}</span>`}</button>
+      <div><h1><button class="title-btn" data-act="edit-title" aria-label="제목 고치기">${esc(titleOf(b))}</button></h1>${b.author ? `<div class="meta">${esc(b.author)}</div>` : ""}<div class="count">밑줄 ${ps.length}개</div><div class="count count2">등록일 ${fmtDate(b.createdAt)}</div></div>
     </section>
     <nav class="book-tabs" role="tablist">
       <button class="tab" role="tab" data-act="book-tab" data-tab="mine" aria-selected="${tab === "mine"}">내 밑줄</button>
@@ -660,24 +672,26 @@ input, textarea { font: inherit; color: var(--fg); }
   }
   const closeSheet = () => { layer.innerHTML = ""; };
 
-  function bookSheet(book) {
+  function bookSheet(book, opts = {}) {
     let coverBlob = null;
     const editing = !!book;
+    const coverHTML = hasCover(book) ? coverImg(book) : `<span class="ph" style="font-size:12px;color:var(--muted)">표지</span>`;
+    const shootBtn = `<label class="btn ghost file-btn" style="height:38px;font-size:14px">${cameraIcon()} 표지 ${editing ? "다시 " : ""}찍기<input id="cover-file" type="file" accept="image/*"></label>`;
     openSheet(`
-      <h3>${editing ? "책 정보 고치기" : "책 등록"}</h3>
-      <div class="shot">
-        <div class="cover" id="cv">${hasCover(book) ? coverImg(book) : `<span class="ph" style="font-size:12px;color:var(--muted)">표지</span>`}</div>
-        <div class="hint"><span>표지를 정면에서 찍으면 책장이 깔끔해져요.</span>
-          <label class="btn ghost file-btn" style="height:38px;font-size:14px">${cameraIcon()} 표지 ${editing ? "다시 " : ""}찍기<input id="cover-file" type="file" accept="image/*" capture="environment"></label></div>
-      </div>
-      <div class="field"><label for="bt">제목</label><input id="bt" maxlength="120" placeholder="예: 소년이 온다" value="${esc(book ? book.title : "")}"></div>
+      <h3>${opts.first ? "어떤 책인가요?" : editing ? "책 정보 고치기" : "책 등록"}</h3>
+      ${opts.big ? `<div class="cover cover-big" id="cv">${coverHTML}</div><div style="display:flex;justify-content:center">${shootBtn}</div>` : `<div class="shot">
+        <div class="cover" id="cv">${coverHTML}</div>
+        <div class="hint"><span>표지를 정면에서 찍으면 책장이 깔끔해져요.</span>${shootBtn}</div>
+      </div>`}
+      <div class="field"><label for="bt">제목</label><input id="bt" maxlength="120" placeholder="표지를 보고 제목을 적어 주세요" value="${esc(book ? book.title : "")}"></div>
       <div class="field"><label for="ba">저자 (선택)</label><input id="ba" maxlength="80" placeholder="공유할 때 출처에 함께 표시돼요" value="${esc(book ? (book.author || "") : "")}"></div>
-      <div class="sheet-actions"><button class="btn ghost" data-act="close">취소</button><button class="btn" id="bsave">${editing ? "저장" : "책장에 꽂기"}</button></div>`,
+      <div class="sheet-actions"><button class="btn ghost" data-act="close">${opts.first ? "나중에" : "취소"}</button><button class="btn" id="bsave">${editing ? "저장" : "책장에 꽂기"}</button></div>`,
       (el) => {
         $("#cover-file", el).addEventListener("change", async (e) => {
           const f = e.target.files[0]; if (!f) return;
           try { const r = await shrink(f, 600); coverBlob = r.blob; $("#cv", el).innerHTML = `<img src="${URL.createObjectURL(r.blob)}" alt="">`; } catch { toast("사진을 읽지 못했어요."); }
         });
+        if (opts.big) setTimeout(() => { const t = $("#bt", el); if (t && !t.value) t.focus(); }, 250);
         $("#bsave", el).addEventListener("click", async () => {
           const title = $("#bt", el).value.trim(), author = $("#ba", el).value.trim();
           if (!title) { toast("제목을 적어 주세요."); $("#bt", el).focus(); return; }
@@ -716,17 +730,17 @@ input, textarea { font: inherit; color: var(--fg); }
   async function addPageFromFile(file) {
     busy(true, "사진을 올리는 중…");
     try {
-      const [r, hi] = await Promise.all([shrink(file, 1200), shrink(file, 2000, { jpeg: true }).catch(() => null)]);
+      const r = await shrink(file, 1200);
       const up = await store.upload(r.blob, "page");
       const id = await store.addPage({ bookId: S.bookId, imageId: up.id, imageUrl: up.id ? "" : up.url, w: r.w, h: r.h, strokes: [], pageNo: "", quote: "", note: "", createdAt: Date.now() });
-      if (hi) hiRes.set(id, URL.createObjectURL(hi.blob));
       busy(false);
       openEditor(id, { imageId: up.id, url: up.url, w: r.w, h: r.h, strokes: [], pageNo: "", quote: "", note: "", bookId: S.bookId, fresh: true });
     } catch (e) { console.warn("add page failed", e); busy(false); toast(errMsg(e)); }
   }
 
   /* ---------- editor ---------- */
-  const ED = { el: null, id: null, page: null, strokes: [], tool: "mark", straight: false, cur: null, W: 0, H: 0, ctx: null, dirty: false };
+  let savedColor = "y"; try { savedColor = localStorage.getItem("underline-color") || "y"; } catch {}
+  const ED = { el: null, id: null, page: null, strokes: [], tool: "mark", color: MARK_COLORS[savedColor] ? savedColor : "y", straight: false, cur: null, W: 0, H: 0, ctx: null, dirty: false };
 
   function openEditor(id, preset) {
     const p = preset || S.pages.find(p => p.id === id); if (!p) return;
@@ -735,14 +749,14 @@ input, textarea { font: inherit; color: var(--fg); }
     const el = document.createElement("div"); el.className = "editor"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "밑줄 긋기");
     el.innerHTML = `<div class="ed-inner">
       <div class="ed-top">
-        <button class="back" id="ed-close">${backIcon()} 닫기</button>
+        <button class="back" id="ed-close">${backIcon()} 뒤로</button>
         <div class="ttl">${esc(titleOf(book))}</div>
-        <button class="btn save-btn" id="ed-save">저장</button>
+        <span class="ed-actions"><button class="btn ghost save-btn" id="ed-del">삭제</button><button class="btn save-btn" id="ed-save">저장</button></span>
       </div>
       <div class="stage" id="stage"><div class="paper" id="paper"><img id="ed-img" alt="찍은 페이지"><canvas id="ed-cv"></canvas></div></div>
       <div class="tools">
-        <div class="tool-group">
-          <button class="tool" data-tool="mark" aria-pressed="true"><span class="swatch-mark"></span>형광펜</button>
+        <div class="tool-group colors" role="radiogroup" aria-label="형광펜 색">
+          ${Object.keys(MARK_COLORS).map(k => `<button class="color-dot" data-color="${k}" role="radio" aria-checked="${k === ED.color}" aria-label="${MARK_COLORS[k].name}" style="--dot:${MARK_COLORS[k].css}"></button>`).join("")}
         </div>
         <div class="tool-group">
           <button class="tool" id="t-undo" aria-label="되돌리기">${undoIcon()} 이전으로</button>
@@ -750,9 +764,8 @@ input, textarea { font: inherit; color: var(--fg); }
       </div>
       <div class="ed-fields">
         <div class="field" style="max-width:140px"><label for="ed-pg">쪽수</label><input id="ed-pg" inputmode="numeric" maxlength="8" placeholder="예: 134" value="${esc(p.pageNo || "")}"></div>
-        <div class="field"><label for="ed-n">메모</label><textarea id="ed-n" rows="3" maxlength="2000" placeholder="이 문장에서 멈춘 이유를 적어 두세요">${esc(p.note || "")}</textarea></div>
+        <div class="field"><label for="ed-n">메모</label><textarea id="ed-n" rows="3" maxlength="2000" placeholder="밑줄 그은 이유">${esc(p.note || "")}</textarea></div>
         ${store && store.sharedFor ? `<label class="share-row" for="ed-share"><span><b>같은 책 독자에게 공유</b><small id="ed-share-hint"></small></span><input type="checkbox" class="switch-input" id="ed-share" role="switch" ${p.shared ? "checked" : ""}></label>` : ""}
-        ${preset && preset.fresh ? "" : `<button class="btn danger block" id="ed-del">이 페이지 지우기</button>`}
       </div></div>`;
     document.body.appendChild(el); ED.el = el; document.body.style.overflow = "hidden";
 
@@ -780,6 +793,10 @@ input, textarea { font: inherit; color: var(--fg); }
     el.querySelectorAll("[data-tool]").forEach(b => b.onclick = () => { ED.tool = b.dataset.tool; el.querySelectorAll("[data-tool]").forEach(x => x.setAttribute("aria-pressed", x === b)); });
     $("#t-undo", el).onclick = () => { if (ED.strokes.length) { ED.strokes.pop(); ED.dirty = true; redraw(); } };
     $("#ed-close", el).onclick = () => closeEditor();
+    el.querySelectorAll("[data-color]").forEach(b => b.onclick = () => {
+      ED.color = b.dataset.color; try { localStorage.setItem("underline-color", ED.color); } catch {}
+      el.querySelectorAll("[data-color]").forEach(x => x.setAttribute("aria-checked", x === b));
+    });
     $("#ed-save", el).onclick = saveEditor;
     ["ed-pg", "ed-n"].forEach(i => $("#" + i, el).addEventListener("input", () => { ED.dirty = true; }));
     const shareEl = $("#ed-share", el), noteEl = $("#ed-n", el);
@@ -787,11 +804,11 @@ input, textarea { font: inherit; color: var(--fg); }
       if (!shareEl) return;
       const has = !!noteEl.value.trim();
       shareEl.disabled = !has; if (!has) shareEl.checked = false;
-      $("#ed-share-hint", el).textContent = has ? "메모와 밑줄 문장(150자까지)이 같은 책 독자에게 보여요. 사진은 공유되지 않아요." : "메모를 적으면 공유할 수 있어요";
+      $("#ed-share-hint", el).textContent = has ? "메모가 같은 책 독자에게 보여요. 사진은 공유되지 않아요." : "메모를 적으면 공유할 수 있어요";
     };
     if (shareEl) { syncShare(); noteEl.addEventListener("input", syncShare); shareEl.addEventListener("change", () => { ED.dirty = true; }); }
     const del = $("#ed-del", el);
-    if (del) del.onclick = () => confirmSheet("이 페이지를 지울까요?", "사진과 밑줄, 적어 둔 생각이 함께 지워지고 되돌릴 수 없어요.", "지우기", async () => { await store.deletePage(ED.id); closeEditor(true); toast("페이지를 지웠어요."); });
+    if (del) del.onclick = () => confirmSheet("이 페이지를 지울까요?", "사진과 밑줄, 메모가 함께 지워지고 되돌릴 수 없어요.", "지우기", async () => { await store.deletePage(ED.id); closeEditor(true); toast("페이지를 지웠어요."); });
 
     // drawing
     let active = null;
@@ -801,7 +818,7 @@ input, textarea { font: inherit; color: var(--fg); }
       e.preventDefault(); active = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch {}
       const [x, y] = pt(e);
       if (ED.tool === "erase") { eraseAt(x, y); return; }
-      ED.cur = { t: ED.tool, p: [x, y] };
+      ED.cur = { t: ED.tool, c: ED.color, p: [x, y] };
     });
     cv.addEventListener("pointermove", (e) => {
       if (e.pointerId !== active) return;
@@ -849,7 +866,7 @@ input, textarea { font: inherit; color: var(--fg); }
   function straightPreview(s) {
     const xs = s.p.filter((_, i) => i % 2 === 0), ys = s.p.filter((_, i) => i % 2 === 1);
     const y = ys.reduce((a, b) => a + b, 0) / ys.length;
-    return { t: s.t, p: [Math.min(...xs), y, Math.max(...xs), y] };
+    return { t: s.t, c: s.c, p: [Math.min(...xs), y, Math.max(...xs), y] };
   }
   async function saveEditor() {
     const el = ED.el;
@@ -857,84 +874,19 @@ input, textarea { font: inherit; color: var(--fg); }
     const shareEl = $("#ed-share", el);
     if (shareEl) d.shared = shareEl.checked && !!d.note;
     const strokesChanged = JSON.stringify(ED.strokes) !== ED.orig.strokes;
-    const runOcr = !!sampleFn && ED.strokes.length > 0 && (strokesChanged || !ED.orig.quote);
     if (!ED.strokes.length) d.quote = "";
-    if (runOcr) d.ocr = "pending";
-    const id = ED.id, page = { ...ED.page, strokes: ED.strokes };
+    const id = ED.id;
     busy(true);
     try {
       await store.updatePage(id, d); ED.dirty = false; closeEditor(true);
       if (S.shared && S.shared.bookId === S.bookId && "shared" in d) loadShared(S.bookId);
-      toast(runOcr ? "저장했어요. 밑줄 문장을 글자로 옮기고 있어요." : "밑줄을 저장했어요.");
-      if (runOcr) readUnderline(id, page).then(() => cropToMarks(id));
+      toast("저장했어요.");
+      if (strokesChanged && ED.strokes.length) cropToMarks(id);
     }
     catch (e) { toast(errMsg(e)); } finally { busy(false); }
   }
 
-  /* ---------- reading text with Claude ---------- */
-  const sampleFn = !!window.Tesseract;  // on-device text reading is available
-  let workerP = null, queue = Promise.resolve(), warned = false;
-  function getWorker() {
-    if (!workerP) {
-      if (!warned) { warned = true; toast("처음 한 번은 글자 인식 데이터를 받느라 조금 걸려요."); }
-      workerP = Tesseract.createWorker("kor+eng", 1).catch(e => { workerP = null; throw e; });
-    }
-    return workerP;
-  }
-  // run OCR jobs one at a time
-  function ocr(canvas, psm) {
-    const job = queue.then(async () => {
-      const w = await getWorker();
-      await w.setParameters({ tessedit_pageseg_mode: psm, preserve_interword_spaces: "1" });
-      return (await w.recognize(canvas)).data;
-    });
-    queue = job.catch(() => {});
-    return job;
-  }
-  const cleanText = (t) => String(t || "")
-    .replace(/[|_~`^]/g, "")
-    .replace(/\s+/g, " ")
-    .replace(/\s+([.,!?…”’)\]])/g, "$1")
-    .replace(/([“‘(\[])\s+/g, "$1")
-    .trim();
-  async function loadBitmap(url) { const r = await fetch(url); return await createImageBitmap(await r.blob()); }
-  // cut one strip of the page around a stroke, enlarged and in grayscale for better reading
-  function stripCanvas(bmp, s) {
-    const W = bmp.width, H = bmp.height;
-    const xs = s.p.filter((_, i) => i % 2 === 0).map(v => v * W), ys = s.p.filter((_, i) => i % 2 === 1).map(v => v * H);
-    const lh = Math.max(14, W * 0.032);
-    const yMid = ys.reduce((a, b) => a + b, 0) / ys.length;
-    let top, bot;
-    if (s.t === "mark") { top = Math.min(...ys) - lh * 0.7; bot = Math.max(...ys) + lh * 0.7; }
-    else { top = Math.min(...ys) - lh * 1.25; bot = Math.max(...ys) + lh * 0.1; }
-    const x0 = Math.max(0, Math.min(...xs) - W * 0.015), x1 = Math.min(W, Math.max(...xs) + W * 0.015);
-    top = Math.max(0, top); bot = Math.min(H, bot);
-    const k = Math.min(3, Math.max(1.5, 64 / Math.max(1, bot - top)));
-    const c = document.createElement("canvas");
-    c.width = Math.round((x1 - x0) * k); c.height = Math.round((bot - top) * k);
-    const ctx = c.getContext("2d");
-    ctx.filter = "grayscale(1) contrast(1.35)";
-    ctx.drawImage(bmp, x0, top, x1 - x0, bot - top, 0, 0, c.width, c.height);
-    return { canvas: c, y: yMid, lh, x: Math.min(...xs), multi: (Math.max(...ys) - Math.min(...ys)) > lh * 1.2 };
-  }
-  async function readUnderline(id, page) {
-    try {
-      const bmp = await loadBitmap(hiRes.get(id) || page.imageUrl);
-      const strips = page.strokes.map(s => stripCanvas(bmp, s)).sort((a, b) => a.y - b.y || a.x - b.x);
-      let out = "", prevY = null;
-      for (const st of strips) {
-        const d = await ocr(st.canvas, st.multi ? 6 : 7);
-        const t = cleanText(d.text); if (!t) continue;
-        if (prevY !== null) out += (st.y - prevY < st.lh * 3 ? " " : "\n");
-        out += t; prevY = st.y;
-      }
-      await store.updatePage(id, out ? { quote: out, ocr: "done" } : { ocr: "failed" });
-    } catch (e) {
-      console.warn("underline read failed", e);
-      try { await store.updatePage(id, { ocr: "failed" }); } catch {}
-    }
-  }
-  // after reading, keep only the band of the page around the highlights (full width),
+  // after saving, keep only the band of the page around the highlights (full width),
   // move the strokes onto the smaller photo, and delete the full page photo
   async function cropToMarks(id) {
     try {
@@ -957,26 +909,7 @@ input, textarea { font: inherit; color: var(--fg); }
       const old = p.imageId;
       await store.updatePage(id, { imageId: up.id, w: W, h: span, strokes });
       await store.deleteImage(old);
-      if (hiRes.has(id)) { URL.revokeObjectURL(hiRes.get(id)); hiRes.delete(id); }
     } catch (e) { console.warn("crop failed", e); }
-  }
-
-  // cover: take the line written in the biggest letters as the title
-  async function readCover(id, blob) {
-    try {
-      const bmp = await createImageBitmap(blob);
-      const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
-      const ctx = c.getContext("2d"); ctx.filter = "grayscale(1) contrast(1.2)"; ctx.drawImage(bmp, 0, 0);
-      const d = await ocr(c, 3);
-      const lines = (d.lines || []).map(l => ({ t: cleanText(l.text), h: l.bbox.y1 - l.bbox.y0, c: l.confidence }))
-        .filter(l => l.c > 55 && l.t.replace(/[^가-힣A-Za-z0-9]/g, "").length >= 2);
-      lines.sort((a, b) => b.h - a.h);
-      const title = lines.length ? lines[0].t : "";
-      await store.updateBook(id, { title, ocr: title ? "done" : "failed" });
-    } catch (e) {
-      console.warn("cover read failed", e);
-      try { await store.updateBook(id, { ocr: "failed" }); } catch {}
-    }
   }
 
   async function addBookFromFile(file) {
@@ -985,17 +918,14 @@ input, textarea { font: inherit; color: var(--fg); }
       const r = await shrink(file, 600);
       const up = await store.upload(r.blob, "cover");
       const d = { title: "", coverId: up.id, coverUrl: up.id ? "" : up.url, createdAt: Date.now() };
-      if (sampleFn) d.ocr = "pending";
       const id = await store.addBook(d);
-      S.view = "book"; S.bookId = id; render(); window.scrollTo(0, 0);
-      toast("책장에 꽂았어요. 제목이 틀리면 ⋯ 메뉴에서 고칠 수 있어요.");
-      if (sampleFn) readCover(id, r.blob);
+      S.view = "book"; S.bookId = id; S.bookTab = "mine"; render(); window.scrollTo(0, 0);
+      busy(false);
+      const b = S.books.find(b => b.id === id); if (b) bookSheet(b, { big: true, first: true });
     } catch (e) { toast(errMsg(e)); } finally { busy(false); }
   }
   function closeEditor(force) {
-    if (!force && ED.dirty && ED.strokes.length) {
-      return confirmSheet("저장하지 않고 닫을까요?", "방금 그은 밑줄과 적은 내용이 사라져요.", "저장 안 하고 닫기", async () => closeEditor(true));
-    }
+    if (!force && ED.dirty) return saveEditor(); // going back keeps what was drawn and written
     if (ED.layout) window.removeEventListener("resize", ED.layout);
     if (ED.el) ED.el.remove(); ED.el = null; ED.ctx = null; document.body.style.overflow = "";
     render();
@@ -1011,6 +941,7 @@ input, textarea { font: inherit; color: var(--fg); }
     if (a === "auth-tab") { S.authTab = t.dataset.tab; S.authErr = ""; const n = $("#au-name"); if (n) S.authName = n.value; render(); return; }
     if (a === "logout") return confirmSheet("로그아웃할까요?", "기록은 계정에 그대로 남아 있어요. 다시 로그인하면 이어서 볼 수 있어요.", "로그아웃", async () => { await sb.auth.signOut(); location.reload(); });
     if (a === "migrate") return migrateLocal();
+    if (a === "edit-title") { const b = S.books.find(b => b.id === S.bookId); if (b) bookSheet(b, { big: true }); return; }
     if (a === "book-tab") { S.bookTab = t.dataset.tab; render(); if (S.bookTab === "shared" && !(S.shared && S.shared.bookId === S.bookId && !S.shared.err)) loadShared(S.bookId); return; }
     if (a === "shared-retry") return loadShared(S.bookId);
     if (a === "terms") return termsSheet();
