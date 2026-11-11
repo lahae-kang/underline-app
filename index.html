@@ -219,6 +219,48 @@ button.cover { padding: 0; cursor: pointer; }
 .choice b { font-size: 15.5px; }
 .choice small { font-size: 12.5px; color: var(--muted); }
 .choice input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.tabs { align-items: center; }
+.cal-btn { margin-left: auto; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: var(--fg); }
+.cal-btn:active { background: var(--soft); }
+.guide { margin-top: 18px; border: 1.5px solid var(--fg); border-radius: 14px; padding: 14px; display: grid; gap: 12px; }
+.guide-ttl { font-size: 14px; }
+.guide ol { list-style: none; margin: 0; padding: 0; display: flex; align-items: flex-start; gap: 6px; }
+.guide li { display: grid; justify-items: center; gap: 6px; text-align: center; flex: 1; min-width: 0; color: var(--muted); }
+.guide li span { display: grid; gap: 2px; }
+.guide li b { font-size: 13px; color: inherit; }
+.guide li small { font-size: 11px; line-height: 1.35; }
+.guide .g-num { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid currentColor; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.guide li.now { color: var(--fg); }
+.guide li.now .g-num { background: var(--fg); color: var(--ink-inv); border-color: var(--fg); }
+.guide li.done { color: var(--fg); }
+.guide li.done .g-num { background: #ffd600; color: #111; border-color: #ffd600; }
+.guide li.g-arrow { flex: none; padding-top: 4px; color: var(--muted); }
+.today-mark { margin-top: 14px; display: flex; align-items: stretch; border: 1.5px solid var(--fg); border-radius: 12px; overflow: hidden; background: color-mix(in srgb, #ffd600 14%, var(--bg)); }
+.tm-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px 12px; text-align: left; }
+.tm-thumb { width: 64px; height: 44px; flex: none; overflow: hidden; border-radius: 6px; background: var(--soft); display: grid; place-items: center; }
+.tm-thumb canvas { width: 100%; height: 100%; object-fit: cover; }
+.tm-text { display: grid; gap: 2px; min-width: 0; }
+.tm-text b { font-size: 13.5px; line-height: 1.35; }
+.tm-text small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-x { width: 40px; font-size: 20px; color: var(--muted); flex: none; }
+.cal-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cal-stats div { display: grid; gap: 2px; padding: 10px; background: var(--soft); border-radius: 10px; text-align: center; }
+.cal-stats b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.cal-stats small { font-size: 11.5px; color: var(--muted); }
+.cal-nav { display: flex; align-items: center; justify-content: space-between; }
+.cal-nav .cal-next svg { transform: scaleX(-1); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; text-align: center; }
+.cal-grid .wd { font-size: 11.5px; color: var(--muted); padding-bottom: 4px; }
+.cal-day { aspect-ratio: 1; border-radius: 50%; font-size: 13.5px; font-variant-numeric: tabular-nums; position: relative; color: var(--muted); }
+.cal-day:disabled { cursor: default; }
+.cal-day.has { color: var(--fg); font-weight: 700; }
+.cal-day.has::after { content: ""; position: absolute; left: 50%; bottom: 12%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #ffd600; }
+.cal-day.today { box-shadow: inset 0 0 0 1.5px var(--fg); }
+.cal-day.sel { background: var(--fg); color: var(--ink-inv); }
+.cal-hint { font-size: 12.5px; color: var(--muted); margin: 0; }
+.cal-list { display: grid; gap: 6px; }
+.cal-list small { font-size: 12.5px; color: var(--muted); }
+.cal-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; text-align: left; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 92px); background: var(--fg); color: var(--ink-inv); padding: 10px 16px; border-radius: 999px; font-size: 13.5px; z-index: 60; max-width: calc(100% - 32px); text-align: center; }
 .loading { text-align: center; color: var(--muted); padding: 60px 0; font-size: 14px; }
 .busy { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.35); display: grid; place-items: center; }
@@ -541,6 +583,80 @@ button.cover { padding: 0; cursor: pointer; }
   /* ---------- views ---------- */
   function header(inner) { return `<header class="top">${inner}</header>`; }
 
+  /* ---------- first-book guide ---------- */
+  // shown until the first highlight is saved; finished steps get a check
+  function guideCardHTML() {
+    const marked = S.pages.some(p => markCount(p));
+    if (marked || !S.loaded.pages) return "";
+    const done = [S.books.length > 0, S.pages.length > 0, marked];
+    const steps = [["표지 찍기", "책 등록으로 첫 책을 꽂아요"], ["페이지 찍기", "표지의 형광펜 버튼을 눌러요"], ["형광펜 긋기", "마음에 드는 문장 위로 쓱"]];
+    const now = done.indexOf(false);
+    return `<section class="guide" aria-label="시작 안내">
+      <b class="guide-ttl">처음이라면 이렇게 시작해요</b>
+      <ol>${steps.map((st, i) => `<li class="${done[i] ? "done" : i === now ? "now" : ""}"><span class="g-num">${done[i] ? "✓" : i + 1}</span><span><b>${st[0]}</b><small>${st[1]}</small></span></li>${i < 2 ? `<li class="g-arrow" aria-hidden="true">→</li>` : ""}`).join("")}</ol>
+    </section>`;
+  }
+
+  /* ---------- today's highlight (10+ highlights only) ---------- */
+  const dayKey = (t) => { const d = new Date(t); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+  function todayPick() {
+    const marked = S.pages.filter(p => markCount(p) && (p.imageId || p.imageUrl));
+    if (marked.length < 10) return null;
+    let hidden = ""; try { hidden = localStorage.getItem("underline-today-hide") || ""; } catch {}
+    const today = dayKey(Date.now());
+    if (hidden === today) return null;
+    const older = marked.filter(p => Date.now() - (p.createdAt || 0) > 3 * 86400000);
+    const pool = (older.length ? older : marked).slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    let h = 0; for (const ch of today + (S.user || "")) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return pool[h % pool.length];
+  }
+  function todayMarkHTML() {
+    const p = todayPick(); if (!p) return "";
+    const b = S.books.find(b => b.id === p.bookId) || {};
+    const d = new Date(p.createdAt || Date.now());
+    return `<div class="today-mark" role="note">
+      <button class="tm-main" data-act="today-open" data-id="${esc(p.id)}">
+        <span class="tm-thumb"><canvas data-crop="${esc(p.id)}" aria-hidden="true"></canvas></span>
+        <span class="tm-text"><b>오늘의 밑줄 · 예전에 넣어 둔 밑줄을 확인해 보세요</b><small>『${esc(titleOf(b))}』 · ${d.getMonth() + 1}월 ${d.getDate()}일에 그었어요</small></span>
+      </button>
+      <button class="tm-x" data-act="today-close" aria-label="오늘은 그만 보기">×</button>
+    </div>`;
+  }
+
+  /* ---------- reading calendar ---------- */
+  function markDays() {
+    const m = new Map();
+    for (const p of S.pages) { if (!p.createdAt) continue; const k = dayKey(p.createdAt); if (!m.has(k)) m.set(k, []); m.get(k).push(p); }
+    return m;
+  }
+  function streakDays(days) {
+    let n = 0; const d = new Date(); d.setHours(12, 0, 0, 0);
+    if (!days.has(dayKey(d))) d.setDate(d.getDate() - 1);
+    while (days.has(dayKey(d))) { n++; d.setDate(d.getDate() - 1); }
+    return n;
+  }
+  function calendarSheet() {
+    const now = new Date();
+    if (!S.cal) S.cal = { y: now.getFullYear(), m: now.getMonth(), sel: null };
+    const { y, m, sel } = S.cal, days = markDays();
+    const first = new Date(y, m, 1).getDay(), last = new Date(y, m + 1, 0).getDate();
+    const todayK = dayKey(now), prefix = y + "-" + String(m + 1).padStart(2, "0") + "-";
+    let monthCount = 0, cells = "";
+    for (let i = 0; i < first; i++) cells += `<span></span>`;
+    for (let d = 1; d <= last; d++) {
+      const k = prefix + String(d).padStart(2, "0"), has = days.has(k); if (has) monthCount++;
+      cells += `<button class="cal-day${has ? " has" : ""}${k === todayK ? " today" : ""}${k === sel ? " sel" : ""}" data-act="cal-day" data-day="${k}" ${has ? "" : "disabled"} aria-label="${m + 1}월 ${d}일${has ? `, 밑줄 ${days.get(k).length}개` : ""}">${d}</button>`;
+    }
+    const streak = streakDays(days);
+    const list = sel && days.has(sel) ? days.get(sel) : [];
+    openSheet(`<div class="cal-head"><h3>독서 기록</h3></div>
+      <div class="cal-stats"><div><b>${streak}일</b><small>연속 기록</small></div><div><b>${monthCount}일</b><small>${m + 1}월에 기록한 날</small></div><div><b>${days.size}일</b><small>지금까지</small></div></div>
+      <div class="cal-nav"><button class="icon-btn" data-act="cal-prev" aria-label="이전 달">${backIcon()}</button><b>${y}년 ${m + 1}월</b><button class="icon-btn cal-next" data-act="cal-next" aria-label="다음 달">${backIcon()}</button></div>
+      <div class="cal-grid"><span class="wd">일</span><span class="wd">월</span><span class="wd">화</span><span class="wd">수</span><span class="wd">목</span><span class="wd">금</span><span class="wd">토</span>${cells}</div>
+      ${list.length ? `<div class="cal-list"><small>${Number(sel.slice(5, 7))}월 ${Number(sel.slice(8))}일 · 밑줄 ${list.length}개</small>${list.map(p => { const b = S.books.find(b => b.id === p.bookId) || {}; return `<button class="cal-item" data-act="cal-open" data-id="${esc(p.id)}"><span>${esc(titleOf(b))}</span><span>›</span></button>`; }).join("")}</div>` : `<p class="cal-hint">점이 찍힌 날은 사진을 넣은 날이에요. 날짜를 누르면 그날의 밑줄을 볼 수 있어요.</p>`}
+      <button class="btn ghost block" data-act="close" style="border-color:transparent">닫기</button>`);
+  }
+
   function viewLibrary() {
     const books = S.books.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     let h = header(`
@@ -551,25 +667,21 @@ button.cover { padding: 0; cursor: pointer; }
       <nav class="tabs" role="tablist">
         <button class="tab" role="tab" data-act="tab" data-tab="books" aria-selected="${S.tab === "books"}">책장</button>
         <button class="tab" role="tab" data-act="tab" data-tab="marks" aria-selected="${S.tab === "marks"}">밑줄 모아보기</button>
+        <button class="cal-btn" data-act="calendar" aria-label="독서 기록 달력">${calIcon()}</button>
       </nav>`);
     if (S.localCount) h += `<div class="migrate"><span>로그인 전에 이 폰에 남긴 책 ${S.localCount}권이 있어요. 계정으로 옮기면 다른 기기에서도 볼 수 있어요.</span><button class="btn" data-act="migrate">계정으로 옮기기</button></div>`;
     if (S.err) h += `<p class="notice">${esc(S.err)}</p>`;
+    if (S.loaded.pages) h += todayMarkHTML();
 
     if (S.tab === "marks") return h + viewMarks();
 
     if (!S.loaded.books) return h + `<div class="loading">책장을 불러오는 중…</div>`;
     if (!books.length) {
-      return h + `<section class="empty">
-        <h2>아직 꽂힌 책이 없어요</h2>
-        <p>읽고 있는 책의 표지를 찍어서 첫 책을 꽂아 보세요.</p>
-        <ol class="steps">
-          <li><b>1</b><span>표지를 찍어 책을 등록해요</span></li>
-          <li><b>2</b><span>표지를 누르고 마음에 드는 페이지를 찍어요</span></li>
-          <li><b>3</b><span>사진 위에 손가락으로 밑줄을 그어요</span></li>
-        </ol>
-        <button class="btn" style="margin-top:10px" data-act="add-book">${plusIcon()} 첫 책 등록하기</button>
+      return h + guideCardHTML() + `<section class="empty" style="padding-top:28px">
+        <button class="btn" data-act="add-book">${plusIcon()} 첫 책 등록하기</button>
       </section>`;
     }
+    h += guideCardHTML();
     h += `<div class="grid" style="margin-top:20px">`;
     for (const b of books) {
       const n = pagesOf(b.id).length;
@@ -1015,6 +1127,12 @@ button.cover { padding: 0; cursor: pointer; }
     if (a === "terms") return termsSheet();
     if (a === "report") { const pid = t.dataset.id; return confirmSheet("이 밑줄을 신고할까요?", "신고한 밑줄은 내 화면에서 바로 사라지고, 신고가 쌓이면 모두에게서 숨겨져요.", "신고하기", async () => { await store.report(pid, ""); ga.event("report"); toast("신고했어요."); await loadShared(S.bookId); }); }
     if (a === "add-book") return addBookChoice();
+    if (a === "calendar") { S.cal = null; ga.event("calendar_open"); return calendarSheet(); }
+    if (a === "cal-prev" || a === "cal-next") { const d = new Date(S.cal.y, S.cal.m + (a === "cal-next" ? 1 : -1), 1); S.cal = { y: d.getFullYear(), m: d.getMonth(), sel: null }; return calendarSheet(); }
+    if (a === "cal-day") { S.cal.sel = t.dataset.day; return calendarSheet(); }
+    if (a === "cal-open") { closeSheet(); return openEditor(t.dataset.id); }
+    if (a === "today-open") { ga.event("today_mark_open"); return openEditor(t.dataset.id); }
+    if (a === "today-close") { try { localStorage.setItem("underline-today-hide", dayKey(Date.now())); } catch {} render(); return; }
     if (a === "add-book-text") return bookSheet(null, { textOnly: true });
     if (a === "open-book") { S.view = "book"; S.bookId = t.dataset.id; S.bookTab = "mine"; render(); window.scrollTo(0, 0); loadShared(S.bookId); return; }
     if (a === "home") { S.view = "library"; render(); window.scrollTo(0, 0); return; }
@@ -1066,6 +1184,7 @@ button.cover { padding: 0; cursor: pointer; }
   function cameraIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`; }
   // cover button: a highlighter stroke across the top-left, camera tucked bottom-right
   function markCameraIcon() { return `<svg viewBox="0 0 30 30" aria-hidden="true"><path d="M6 10.5 L15 8.5" stroke="#ffd600" stroke-width="3" stroke-linecap="round"/><g transform="translate(11 11) scale(.68)" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></g></svg>`; }
+  function calIcon() { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><circle cx="12" cy="14.5" r="1.3" fill="currentColor" stroke="none"/></svg>`; }
   function penIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>`; }
   function backIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>`; }
   function dotsIcon() { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>`; }
