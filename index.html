@@ -538,19 +538,14 @@ input, textarea { font: inherit; color: var(--fg); }
       <div class="tools">
         <div class="tool-group">
           <button class="tool" data-tool="mark" aria-pressed="true"><span class="swatch-mark"></span>형광펜</button>
-          <button class="tool" data-tool="pen" aria-pressed="false"><span class="swatch-pen"></span>밑줄</button>
-          <button class="tool" data-tool="erase" aria-pressed="false">지우개</button>
         </div>
         <div class="tool-group">
-          <button class="tool" id="t-straight" aria-pressed="true" title="선을 곧게 펴기">곧게</button>
-          <button class="tool" id="t-undo" aria-label="되돌리기">${undoIcon()}</button>
+          <button class="tool" id="t-undo" aria-label="되돌리기">${undoIcon()} 이전으로</button>
         </div>
       </div>
-      <p class="tip">문장 위를 손가락으로 쓱 그으세요. ‘곧게’를 켜 두면 선이 반듯하게 펴져요. 저장하면 밑줄 친 문장을 글자로 옮겨 ‘밑줄 모아보기’에 담아요.</p>
       <div class="ed-fields">
-        <div class="field"><label for="ed-q">밑줄 문장</label><textarea id="ed-q" rows="2" maxlength="1200" placeholder="저장하면 밑줄 친 문장이 자동으로 채워져요">${esc(p.quote || "")}</textarea></div>
         <div class="field" style="max-width:140px"><label for="ed-pg">쪽수</label><input id="ed-pg" inputmode="numeric" maxlength="8" placeholder="예: 134" value="${esc(p.pageNo || "")}"></div>
-        <div class="field"><label for="ed-n">내 생각</label><textarea id="ed-n" rows="3" maxlength="2000" placeholder="이 문장에서 멈춘 이유를 적어 두세요">${esc(p.note || "")}</textarea></div>
+        <div class="field"><label for="ed-n">메모</label><textarea id="ed-n" rows="3" maxlength="2000" placeholder="이 문장에서 멈춘 이유를 적어 두세요">${esc(p.note || "")}</textarea></div>
         ${preset && preset.fresh ? "" : `<button class="btn danger block" id="ed-del">이 페이지 지우기</button>`}
       </div></div>`;
     document.body.appendChild(el); ED.el = el; document.body.style.overflow = "hidden";
@@ -577,11 +572,10 @@ input, textarea { font: inherit; color: var(--fg); }
     window.addEventListener("resize", layout);
 
     el.querySelectorAll("[data-tool]").forEach(b => b.onclick = () => { ED.tool = b.dataset.tool; el.querySelectorAll("[data-tool]").forEach(x => x.setAttribute("aria-pressed", x === b)); });
-    $("#t-straight", el).onclick = (e) => { ED.straight = !ED.straight; e.currentTarget.setAttribute("aria-pressed", ED.straight); };
     $("#t-undo", el).onclick = () => { if (ED.strokes.length) { ED.strokes.pop(); ED.dirty = true; redraw(); } };
     $("#ed-close", el).onclick = () => closeEditor();
     $("#ed-save", el).onclick = saveEditor;
-    ["ed-pg", "ed-q", "ed-n"].forEach(i => $("#" + i, el).addEventListener("input", () => { ED.dirty = true; }));
+    ["ed-pg", "ed-n"].forEach(i => $("#" + i, el).addEventListener("input", () => { ED.dirty = true; }));
     const del = $("#ed-del", el);
     if (del) del.onclick = () => confirmSheet("이 페이지를 지울까요?", "사진과 밑줄, 적어 둔 생각이 함께 지워지고 되돌릴 수 없어요.", "지우기", async () => { await store.deletePage(ED.id); closeEditor(true); toast("페이지를 지웠어요."); });
 
@@ -645,10 +639,10 @@ input, textarea { font: inherit; color: var(--fg); }
   }
   async function saveEditor() {
     const el = ED.el;
-    const d = { strokes: ED.strokes, pageNo: $("#ed-pg", el).value.trim(), quote: $("#ed-q", el).value.trim(), note: $("#ed-n", el).value.trim(), updatedAt: Date.now() };
+    const d = { strokes: ED.strokes, pageNo: $("#ed-pg", el).value.trim(), note: $("#ed-n", el).value.trim(), updatedAt: Date.now() };
     const strokesChanged = JSON.stringify(ED.strokes) !== ED.orig.strokes;
-    const quoteTyped = d.quote !== ED.orig.quote;
-    const runOcr = !!sampleFn && ED.strokes.length > 0 && (strokesChanged || !d.quote) && !quoteTyped;
+    const runOcr = !!sampleFn && ED.strokes.length > 0 && (strokesChanged || !ED.orig.quote);
+    if (!ED.strokes.length) d.quote = "";
     if (runOcr) d.ocr = "pending";
     const id = ED.id, page = { ...ED.page, strokes: ED.strokes };
     busy(true);
