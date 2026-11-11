@@ -544,27 +544,20 @@ button.cover { padding: 0; cursor: pointer; }
   function matches(p) {
     const q = S.q.trim().toLowerCase(); if (!q) return true;
     const b = S.books.find(b => b.id === p.bookId) || {};
-    return [p.quote, p.note, b.title, b.author, p.pageNo].some(v => String(v || "").toLowerCase().includes(q));
+    return [p.note, b.title, b.author, p.pageNo].some(v => String(v || "").toLowerCase().includes(q));
   }
   function cardHTML(p, showBook) {
     const b = S.books.find(b => b.id === p.bookId) || {};
     const meta = `<div class="meta"><span>${showBook ? `<b>${esc(titleOf(b))}</b> · ` : ""}${p.pageNo ? esc(p.pageNo) + "쪽" : "쪽수 없음"}${p.shared ? ` <span class="chip">공유 중</span>` : ""}</span><span>${fmtDate(p.createdAt)}</span></div>`;
-    const quoteHTML = p.quote ? `<p class="quote">${esc(p.quote).replace(/\n/g, "<br>")}</p>` : "";
-    if (showBook && p.quote) {
-      return `<button class="card text-card" data-act="edit-page" data-id="${esc(p.id)}">${meta}${quoteHTML}
-        ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
-      </button>`;
-    }
     return `<button class="card" data-act="edit-page" data-id="${esc(p.id)}">
       ${meta}
       <canvas data-crop="${esc(p.id)}" aria-label="밑줄 그은 부분"></canvas>
-      ${quoteHTML}
       ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
       ${markCount(p) ? "" : `<span class="nomark">아직 밑줄이 없어요 · 눌러서 긋기</span>`}
     </button>`;
   }
   function viewMarks() {
-    let h = `<label class="search"><span aria-hidden="true">${searchIcon()}</span><input id="q" type="search" placeholder="문장, 생각, 책 제목으로 찾기" value="${esc(S.q)}" autocomplete="off"></label>`;
+    let h = `<label class="search"><span aria-hidden="true">${searchIcon()}</span><input id="q" type="search" placeholder="메모, 책 제목으로 찾기" value="${esc(S.q)}" autocomplete="off"></label>`;
     if (!S.loaded.pages) return h + `<div class="loading">밑줄을 불러오는 중…</div>`;
     const list = S.pages.filter(p => markCount(p) && matches(p)).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     if (!list.length) return h + `<section class="empty"><h2>${S.q ? "찾는 밑줄이 없어요" : "모아 볼 밑줄이 아직 없어요"}</h2><p>${S.q ? "다른 단어로 찾아보세요. 밑줄 문장을 옮겨 적어 두면 검색에 걸려요." : "책장에서 책을 열고 페이지를 찍어 밑줄을 그어 보세요."}</p></section>`;
@@ -613,7 +606,6 @@ button.cover { padding: 0; cursor: pointer; }
         const src = [`『${it.title || b.title}』`, it.author, it.page_no ? it.page_no + "쪽" : ""].filter(Boolean).join(", ");
         h += `<article class="card share-card">
           <p class="note-big">${esc(it.note).replace(/\n/g, "<br>")}</p>
-          ${it.quote ? `<p class="quote-sm">${esc(it.quote).replace(/\n/g, "<br>")}</p>` : ""}
           <p class="src">${esc(src)}</p>
           <div class="who"><span><b>${esc(it.name)}</b> · ${fmtDate(Number(it.created_at))}</span>${it.mine ? `<span class="chip">내 밑줄</span>` : `<button class="link-btn" data-act="report" data-id="${esc(it.id)}">신고</button>`}</div>
         </article>`;
@@ -634,7 +626,7 @@ button.cover { padding: 0; cursor: pointer; }
     openSheet(`<h3>공유 이용 안내</h3>
       <ul class="terms">
         <li>공유는 직접 켠 밑줄만, 같은 책을 등록한 사람에게만 보여요.</li>
-        <li>공유되는 건 내 메모, 밑줄 문장 150자까지, 쪽수, 이름, 날짜예요. 페이지 사진과 표지는 공유되지 않아요.</li>
+        <li>공유되는 건 내 메모, 쪽수, 이름, 날짜예요. 페이지 사진과 표지는 공유되지 않아요.</li>
         <li>메모가 있어야 공유할 수 있고, 한 책에서 10개까지 공유할 수 있어요.</li>
         <li>인용과 메모에 대한 책임은 올린 사람에게 있어요. 출처(책 제목, 저자, 쪽수)는 자동으로 붙어요.</li>
         <li>신고가 쌓인 밑줄은 자동으로 숨겨지고, 운영자가 지울 수 있어요.</li>
@@ -642,24 +634,17 @@ button.cover { padding: 0; cursor: pointer; }
       <button class="btn block" data-act="close">확인</button>`);
   }
   function viewAuth() {
-    const signup = S.authTab === "signup";
     return `<section class="auth">
       <div class="brand">_밑줄.</div>
-      <p class="lead">책에서 밑줄 그은 문장을 모아 두는 곳</p>
-      <nav class="switch" role="tablist">
-        <button class="tab" role="tab" data-act="auth-tab" data-tab="login" aria-selected="${!signup}">로그인</button>
-        <button class="tab" role="tab" data-act="auth-tab" data-tab="signup" aria-selected="${signup}">처음이에요</button>
-      </nav>
       <form id="auth-form" novalidate>
-        <div class="field"><label for="au-name">이름</label><input id="au-name" autocomplete="username" maxlength="20" placeholder="${signup ? "2~20자, 다른 사람과 겹치지 않게" : "가입할 때 쓴 이름"}" value="${esc(S.authName || "")}"></div>
-        <div class="field"><label for="au-pw">비밀번호</label><input id="au-pw" type="password" autocomplete="${signup ? "new-password" : "current-password"}" maxlength="72" placeholder="${signup ? "6자 이상" : ""}"></div>
-        ${signup ? `<div class="field"><label for="au-pw2">비밀번호 확인</label><input id="au-pw2" type="password" autocomplete="new-password" maxlength="72"></div>` : ""}
+        <div class="field"><label for="au-name">이름</label><input id="au-name" autocomplete="username" maxlength="20" value="${esc(S.authName || "")}"></div>
+        <div class="field"><label for="au-pw">비밀번호</label><input id="au-pw" type="password" autocomplete="current-password" maxlength="72"></div>
         <p class="err" id="au-err" role="alert">${esc(S.authErr || "")}</p>
-        <button class="btn block" type="submit" id="au-go">${signup ? "가입하고 시작하기" : "로그인"}</button>
-        ${signup ? `<p class="fine">비밀번호를 잊으면 찾을 수 없어요. 꼭 기억해 두세요. 가입하면 <button type="button" class="link-btn" data-act="terms">공유 이용 안내</button>에 동의하는 것으로 봐요.</p>` : ""}
+        <button class="btn block" type="submit" id="au-go">회원가입/로그인</button>
       </form>
     </section>`;
   }
+
 
   function render() {
     const scrollY = window.scrollY;
@@ -949,7 +934,6 @@ button.cover { padding: 0; cursor: pointer; }
     if (a === "scrim") { if (e.target === t) closeSheet(); return; }
     if (a === "close") return closeSheet();
     if (a === "tab") { S.tab = t.dataset.tab; render(); return; }
-    if (a === "auth-tab") { S.authTab = t.dataset.tab; S.authErr = ""; const n = $("#au-name"); if (n) S.authName = n.value; render(); return; }
     if (a === "logout") return confirmSheet("로그아웃할까요?", "기록은 계정에 그대로 남아 있어요. 다시 로그인하면 이어서 볼 수 있어요.", "로그아웃", async () => { await sb.auth.signOut(); location.reload(); });
     if (a === "migrate") return migrateLocal();
     if (a === "edit-title") { const b = S.books.find(b => b.id === S.bookId); if (b) bookSheet(b, { big: true }); return; }
@@ -966,25 +950,27 @@ button.cover { padding: 0; cursor: pointer; }
   document.addEventListener("submit", async (e) => {
     if (e.target.id !== "auth-form") return;
     e.preventDefault();
-    const name = $("#au-name").value.trim(), pw = $("#au-pw").value, signup = S.authTab === "signup";
+    const name = $("#au-name").value.trim(), pw = $("#au-pw").value;
     const fail = (m) => { S.authErr = m; S.authName = name; const el = $("#au-err"); if (el) el.textContent = m; };
     if (name.length < 2) return fail("이름을 2자 이상 적어 주세요.");
     if (pw.length < 6) return fail("비밀번호는 6자 이상이어야 해요.");
-    if (signup && pw !== $("#au-pw2").value) return fail("비밀번호 확인이 달라요.");
     const go = $("#au-go"); go.disabled = true; fail("");
     try {
+      // a name that exists signs in; a new name is created with this password
       const email = nameToEmail(name);
-      const r = signup
-        ? await sb.auth.signUp({ email, password: pw, options: { data: { username: name } } })
-        : await sb.auth.signInWithPassword({ email, password: pw });
+      let r = await sb.auth.signInWithPassword({ email, password: pw });
+      if (r.error && /invalid login|credentials/i.test(r.error.message || "")) {
+        const up = await sb.auth.signUp({ email, password: pw, options: { data: { username: name } } });
+        if (up.error && /already registered|already exists/i.test(up.error.message || "")) throw { message: "wrong password" };
+        r = up;
+      }
       if (r.error) throw r.error;
       if (!r.data.session) throw { message: "no session" };
       S.authErr = ""; enter(r.data.session.user);
     } catch (err) {
       const m = String(err && err.message || "");
-      fail(/already registered|already exists/i.test(m) ? "이미 쓰고 있는 이름이에요. 다른 이름으로 해 주세요."
-        : /invalid login|credentials/i.test(m) ? "이름이나 비밀번호가 맞지 않아요."
-        : /no session/.test(m) ? "가입은 됐지만 로그인하지 못했어요. 로그인 탭에서 다시 해 주세요."
+      fail(/wrong password|invalid login|credentials/i.test(m) ? "비밀번호가 맞지 않아요. (다른 사람이 쓰는 이름일 수도 있어요)"
+        : /no session/.test(m) ? "가입은 됐지만 로그인하지 못했어요. 한 번 더 눌러 주세요."
         : /rate|too many/i.test(m) ? "잠시 후 다시 해 주세요."
         : /fetch|network/i.test(m) ? "인터넷 연결을 확인해 주세요."
         : "로그인하지 못했어요. 잠시 후 다시 해 주세요.");
