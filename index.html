@@ -386,6 +386,30 @@ button.cover { padding: 0; cursor: pointer; }
     };
   }
 
+  /* ---------- analytics (Google Analytics 4) ---------- */
+  // Put the measurement ID (G-XXXXXXXXXX) here. Empty = nothing is sent.
+  const GA_ID = "G-CRVC3WHV9W";
+  const ga = (() => {
+    if (!GA_ID) return { event() {}, screen() {}, user() {} };
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function () { window.dataLayer.push(arguments); };
+    gtag("js", new Date());
+    gtag("config", GA_ID, { send_page_view: false });
+    const sc = document.createElement("script"); sc.async = true;
+    sc.src = "https://www.googletagmanager.com/gtag/js?id=" + GA_ID; document.head.appendChild(sc);
+    let last = "";
+    return {
+      event(name, params) { try { gtag("event", name, params || {}); } catch {} },
+      // each screen counts as a page view: 로그인, 책장, 밑줄 모아보기, 책, 같이 읽은 사람들, 밑줄 화면
+      screen(key, title) {
+        if (key === last) return; last = key;
+        try { gtag("event", "page_view", { page_title: title, page_location: location.origin + location.pathname + "#" + key }); } catch {}
+      },
+      // an opaque account id only (never the name), so one person on several devices counts once
+      user(id) { try { gtag("set", { user_id: id }); } catch {} }
+    };
+  })();
+
   /* ---------- account (Supabase) ---------- */
   const SUPABASE_URL = "https://ftkjrnjstfpunjixnuqc.supabase.co";
   const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0a2pybmpzdGZwdW5qaXhudXFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzODM0MjUsImV4cCI6MjEwOTk1OTQyNX0.UhjmfjquSKJla9oRVBwInredKrlYka-Jo0bh9_BCiEw";
@@ -675,7 +699,15 @@ button.cover { padding: 0; cursor: pointer; }
   }
 
 
+  function trackScreen() {
+    if (ED.el) return ga.screen("editor", "밑줄 화면");
+    if (S.mode === "auth") return ga.screen("login", "로그인");
+    if (S.mode !== "remote") return;
+    if (S.view === "book") return S.bookTab === "shared" ? ga.screen("book-shared", "같이 읽은 사람들") : ga.screen("book", "책 화면");
+    return S.tab === "marks" ? ga.screen("marks", "밑줄 모아보기") : ga.screen("shelf", "책장");
+  }
   function render() {
+    setTimeout(trackScreen, 0);
     const scrollY = window.scrollY;
     const qFocused = document.activeElement && document.activeElement.id === "q";
     const caret = qFocused ? document.activeElement.selectionStart : null;
@@ -731,7 +763,7 @@ button.cover { padding: 0; cursor: pointer; }
             const d = { title, author };
             if (coverBlob) { const up = await store.upload(coverBlob, "cover"); d.coverId = up.id; d.coverUrl = up.id ? "" : up.url; }
             if (editing) { await store.updateBook(book.id, d); toast("책 정보를 고쳤어요."); if (S.bookTab === "shared" || S.shared) loadShared(book.id); }
-            else { d.createdAt = Date.now(); const id = await store.addBook(d); S.view = "book"; S.bookId = id; toast("책장에 꽂았어요."); }
+            else { d.createdAt = Date.now(); const id = await store.addBook(d); ga.event("add_book", { method: coverBlob ? "photo" : "text", books_total: S.books.length }); S.view = "book"; S.bookId = id; toast("책장에 꽂았어요."); }
             closeSheet(); render(); window.scrollTo(0, 0);
           } catch (e) { toast(errMsg(e)); } finally { busy(false); }
         });
@@ -752,7 +784,7 @@ button.cover { padding: 0; cursor: pointer; }
       <button class="btn ghost block" data-act="close" style="border-color:transparent">닫기</button>`, (el) => {
       $("#m-edit", el).onclick = () => bookSheet(b);
       $("#m-del", el).onclick = () => confirmSheet("이 책을 지울까요?", `「${titleOf(b)}」과 밑줄 페이지 ${pagesOf(b.id).length}쪽이 모두 지워지고 되돌릴 수 없어요.`, "지우기", async () => {
-        await store.deleteBook(b.id); S.view = "library"; render(); toast("책을 지웠어요.");
+        ga.event("delete_book"); await store.deleteBook(b.id); S.view = "library"; render(); toast("책을 지웠어요.");
       });
     });
   }
@@ -763,6 +795,7 @@ button.cover { padding: 0; cursor: pointer; }
     try {
       const r = await shrink(file, 1200);
       const up = await store.upload(r.blob, "page");
+      ga.event("add_page");
       const id = await store.addPage({ bookId: S.bookId, imageId: up.id, imageUrl: up.id ? "" : up.url, w: r.w, h: r.h, strokes: [], pageNo: "", quote: "", note: "", createdAt: Date.now() });
       busy(false);
       openEditor(id, { imageId: up.id, url: up.url, w: r.w, h: r.h, strokes: [], pageNo: "", quote: "", note: "", bookId: S.bookId, fresh: true });
@@ -799,6 +832,7 @@ button.cover { padding: 0; cursor: pointer; }
         ${store && store.sharedFor ? `<label class="share-row" for="ed-share"><span><b>같은 책 독자에게 공유</b><small id="ed-share-hint"></small></span><input type="checkbox" class="switch-input" id="ed-share" role="switch" ${p.shared ? "checked" : ""}></label>` : ""}
       </div></div>`;
     document.body.appendChild(el); ED.el = el; document.body.style.overflow = "hidden";
+    trackScreen();
 
     const img = $("#ed-img", el), cv = $("#ed-cv", el), paper = $("#paper", el);
     img.onload = () => { layout(); };
@@ -840,7 +874,7 @@ button.cover { padding: 0; cursor: pointer; }
     };
     if (shareEl) { syncShare(); noteEl.addEventListener("input", syncShare); shareEl.addEventListener("change", () => { ED.dirty = true; }); }
     const del = $("#ed-del", el);
-    if (del) del.onclick = () => confirmSheet("이 페이지를 지울까요?", "사진과 밑줄, 메모가 함께 지워지고 되돌릴 수 없어요.", "지우기", async () => { await store.deletePage(ED.id); closeEditor(true); toast("페이지를 지웠어요."); });
+    if (del) del.onclick = () => confirmSheet("이 페이지를 지울까요?", "사진과 밑줄, 메모가 함께 지워지고 되돌릴 수 없어요.", "지우기", async () => { ga.event("delete_page"); await store.deletePage(ED.id); closeEditor(true); toast("페이지를 지웠어요."); });
 
     // drawing
     let active = null;
@@ -911,6 +945,8 @@ button.cover { padding: 0; cursor: pointer; }
     busy(true);
     try {
       await store.updatePage(id, d); ED.dirty = false; closeEditor(true);
+      ga.event("save_highlight", { strokes: ED.strokes.length, has_note: d.note ? 1 : 0, shared: d.shared ? 1 : 0, color: (ED.strokes[0] && ED.strokes[0].c) || "" });
+      if (d.shared && !ED.page.shared) ga.event("share_on");
       if (S.shared && S.shared.bookId === S.bookId && "shared" in d) loadShared(S.bookId);
       toast("저장했어요.");
       if (strokesChanged && ED.strokes.length) cropToMarks(id);
@@ -951,6 +987,7 @@ button.cover { padding: 0; cursor: pointer; }
       const up = await store.upload(r.blob, "cover");
       const d = { title: "", coverId: up.id, coverUrl: up.id ? "" : up.url, createdAt: Date.now() };
       const id = await store.addBook(d);
+      ga.event("add_book", { method: "photo", books_total: S.books.length });
       S.view = "book"; S.bookId = id; S.bookTab = "mine"; render(); window.scrollTo(0, 0);
       busy(false);
       const b = S.books.find(b => b.id === id); if (b) bookSheet(b, { big: true, first: true });
@@ -970,13 +1007,13 @@ button.cover { padding: 0; cursor: pointer; }
     if (a === "scrim") { if (e.target === t) closeSheet(); return; }
     if (a === "close") return closeSheet();
     if (a === "tab") { S.tab = t.dataset.tab; render(); return; }
-    if (a === "logout") return confirmSheet("로그아웃할까요?", "기록은 계정에 그대로 남아 있어요. 다시 로그인하면 이어서 볼 수 있어요.", "로그아웃", async () => { await sb.auth.signOut(); location.reload(); });
+    if (a === "logout") return confirmSheet("로그아웃할까요?", "기록은 계정에 그대로 남아 있어요. 다시 로그인하면 이어서 볼 수 있어요.", "로그아웃", async () => { ga.event("logout"); await sb.auth.signOut(); location.reload(); });
     if (a === "migrate") return migrateLocal();
     if (a === "edit-title") { const b = S.books.find(b => b.id === S.bookId); if (b) bookSheet(b, { big: true }); return; }
     if (a === "book-tab") { S.bookTab = t.dataset.tab; render(); if (S.bookTab === "shared" && !(S.shared && S.shared.bookId === S.bookId && !S.shared.err)) loadShared(S.bookId); return; }
     if (a === "shared-retry") return loadShared(S.bookId);
     if (a === "terms") return termsSheet();
-    if (a === "report") { const pid = t.dataset.id; return confirmSheet("이 밑줄을 신고할까요?", "신고한 밑줄은 내 화면에서 바로 사라지고, 신고가 쌓이면 모두에게서 숨겨져요.", "신고하기", async () => { await store.report(pid, ""); toast("신고했어요."); await loadShared(S.bookId); }); }
+    if (a === "report") { const pid = t.dataset.id; return confirmSheet("이 밑줄을 신고할까요?", "신고한 밑줄은 내 화면에서 바로 사라지고, 신고가 쌓이면 모두에게서 숨겨져요.", "신고하기", async () => { await store.report(pid, ""); ga.event("report"); toast("신고했어요."); await loadShared(S.bookId); }); }
     if (a === "add-book") return addBookChoice();
     if (a === "add-book-text") return bookSheet(null, { textOnly: true });
     if (a === "open-book") { S.view = "book"; S.bookId = t.dataset.id; S.bookTab = "mine"; render(); window.scrollTo(0, 0); loadShared(S.bookId); return; }
@@ -1000,7 +1037,8 @@ button.cover { padding: 0; cursor: pointer; }
         const up = await sb.auth.signUp({ email, password: pw, options: { data: { username: name } } });
         if (up.error && /already registered|already exists/i.test(up.error.message || "")) throw { message: "wrong password" };
         r = up;
-      }
+        if (!up.error) ga.event("sign_up", { method: "name" });
+      } else if (!r.error) ga.event("login", { method: "name" });
       if (r.error) throw r.error;
       if (!r.data.session) throw { message: "no session" };
       S.authErr = ""; enter(r.data.session.user);
@@ -1094,6 +1132,7 @@ button.cover { padding: 0; cursor: pointer; }
     try { if (!window.indexedDB) return 0; const { books } = await idbStore().dump(); return books.length; } catch { return 0; }
   }
   function enter(user) {
+    ga.user(user.id);
     S.user = (user.user_metadata && user.user_metadata.username) || "";
     if (sb && S.user) sb.from("profiles").upsert({ id: user.id, username: S.user, updated_at: new Date().toISOString() }).then(() => {}, () => {});
     S.mode = "loading"; render();
