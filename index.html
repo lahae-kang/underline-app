@@ -222,19 +222,22 @@ button.cover { padding: 0; cursor: pointer; }
 .tabs { align-items: center; }
 .cal-btn { margin-left: auto; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: var(--fg); }
 .cal-btn:active { background: var(--soft); }
-.guide { margin-top: 18px; border: 1.5px solid var(--fg); border-radius: 14px; padding: 14px; display: grid; gap: 12px; }
-.guide-ttl { font-size: 14px; }
-.guide ol { list-style: none; margin: 0; padding: 0; display: flex; align-items: flex-start; gap: 6px; }
-.guide li { display: grid; justify-items: center; gap: 6px; text-align: center; flex: 1; min-width: 0; color: var(--muted); }
-.guide li span { display: grid; gap: 2px; }
-.guide li b { font-size: 13px; color: inherit; }
-.guide li small { font-size: 11px; line-height: 1.35; }
-.guide .g-num { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid currentColor; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
-.guide li.now { color: var(--fg); }
-.guide li.now .g-num { background: var(--fg); color: var(--ink-inv); border-color: var(--fg); }
-.guide li.done { color: var(--fg); }
-.guide li.done .g-num { background: #ffd600; color: #111; border-color: #ffd600; }
-.guide li.g-arrow { flex: none; padding-top: 4px; color: var(--muted); }
+.onb { position: fixed; inset: 0; z-index: 45; background: var(--bg); display: grid; }
+.onb-inner { max-width: 560px; width: 100%; margin: 0 auto; display: grid; grid-template-rows: auto 1fr auto auto; gap: 16px;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 20px) max(16px, env(safe-area-inset-left, 0px)); min-height: 0; }
+.onb-top { display: flex; justify-content: space-between; align-items: center; }
+.onb-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; min-height: 0; }
+.onb-track::-webkit-scrollbar { display: none; }
+.onb-slide { flex: 0 0 100%; scroll-snap-align: center; display: grid; align-content: center; justify-items: center; text-align: center; gap: 10px; padding: 8px 6px; }
+.onb-art { width: min(260px, 70vw); aspect-ratio: 4 / 3; border-radius: 20px; background: var(--soft); display: grid; place-items: center; margin-bottom: 12px; }
+.onb-art svg { width: 78%; height: auto; color: var(--fg); }
+.onb-step { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+.onb-slide h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; }
+.onb-slide p { margin: 0; font-size: 15px; line-height: 1.6; color: var(--muted); }
+.onb-dots { display: flex; justify-content: center; gap: 8px; }
+.onb-dots span { width: 7px; height: 7px; border-radius: 999px; background: var(--line); transition: width .2s, background .2s; }
+.onb-dots span.on { width: 22px; background: var(--fg); }
+.empty .link-btn { margin-top: 4px; }
 .today-mark { margin-top: 14px; display: flex; align-items: stretch; border: 1.5px solid var(--fg); border-radius: 12px; overflow: hidden; background: color-mix(in srgb, #ffd600 14%, var(--bg)); }
 .tm-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px 12px; text-align: left; }
 .tm-thumb { width: 64px; height: 44px; flex: none; overflow: hidden; border-radius: 6px; background: var(--soft); display: grid; place-items: center; }
@@ -583,18 +586,41 @@ button.cover { padding: 0; cursor: pointer; }
   /* ---------- views ---------- */
   function header(inner) { return `<header class="top">${inner}</header>`; }
 
-  /* ---------- first-book guide ---------- */
-  // shown until the first highlight is saved; finished steps get a check
-  function guideCardHTML() {
-    const marked = S.pages.some(p => markCount(p));
-    if (marked || !S.loaded.pages) return "";
-    const done = [S.books.length > 0, S.pages.length > 0, marked];
-    const steps = [["표지 찍기", "책 등록으로 첫 책을 꽂아요"], ["페이지 찍기", "표지의 형광펜 버튼을 눌러요"], ["형광펜 긋기", "마음에 드는 문장 위로 쓱"]];
-    const now = done.indexOf(false);
-    return `<section class="guide" aria-label="시작 안내">
-      <b class="guide-ttl">처음이라면 이렇게 시작해요</b>
-      <ol>${steps.map((st, i) => `<li class="${done[i] ? "done" : i === now ? "now" : ""}"><span class="g-num">${done[i] ? "✓" : i + 1}</span><span><b>${st[0]}</b><small>${st[1]}</small></span></li>${i < 2 ? `<li class="g-arrow" aria-hidden="true">→</li>` : ""}`).join("")}</ol>
-    </section>`;
+  /* ---------- first-time walkthrough (3 swipeable cards) ---------- */
+  const ONB_KEY = "underline-onboarded";
+  const onbSeen = () => { try { return localStorage.getItem(ONB_KEY) === "1"; } catch { return false; } };
+  const onbDone = () => { try { localStorage.setItem(ONB_KEY, "1"); } catch {} };
+  const ONB_SLIDES = [
+    { t: "표지를 찍어 책을 꽂아요", d: "읽고 있는 책의 표지를 찍거나\n제목만 적어서 책장에 꽂아요.", art: `<svg viewBox="0 0 160 120" aria-hidden="true"><rect x="52" y="14" width="56" height="84" rx="4" fill="var(--soft)" stroke="currentColor" stroke-width="2.5"/><path d="M62 34h36M62 44h24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="112" cy="90" r="20" fill="currentColor"/><g transform="translate(101 80) scale(.9)" fill="none" stroke="var(--bg)" stroke-width="2.2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></g></svg>` },
+    { t: "마음에 드는 페이지를 찍어요", d: "책장에서 표지의 형광펜 버튼을 누르면\n바로 페이지를 찍을 수 있어요.", art: `<svg viewBox="0 0 160 120" aria-hidden="true"><rect x="40" y="10" width="80" height="100" rx="4" fill="var(--soft)" stroke="currentColor" stroke-width="2.5"/><path d="M52 30h56M52 42h56M52 54h44M52 66h56M52 78h36" stroke="var(--muted)" stroke-width="3" stroke-linecap="round"/><circle cx="118" cy="92" r="20" fill="currentColor"/><path d="M106 86 L120 83" stroke="#ffd600" stroke-width="4" stroke-linecap="round"/><g transform="translate(111 87) scale(.6)" fill="none" stroke="var(--bg)" stroke-width="2.6" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></g></svg>` },
+    { t: "문장 위로 형광펜을 그어요", d: "손가락으로 쓱 긋고, 밑줄 그은 이유를 남기면\n밑줄 모아보기에 차곡차곡 쌓여요.", art: `<svg viewBox="0 0 160 120" aria-hidden="true"><rect x="40" y="10" width="80" height="100" rx="4" fill="var(--soft)" stroke="currentColor" stroke-width="2.5"/><path d="M50 52h62" stroke="#ffd600" stroke-width="11" stroke-linecap="round" opacity=".7"/><path d="M52 30h56M52 42h56M52 54h56M52 66h44M52 78h56M52 90h30" stroke="var(--muted)" stroke-width="3" stroke-linecap="round"/></svg>` }
+  ];
+  function showOnboarding(fromMenu) {
+    if (document.querySelector(".onb")) return;
+    S.onbOpen = true; ga.event("onboarding_open", { from: fromMenu ? "menu" : "signup" });
+    const el = document.createElement("div"); el.className = "onb"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "사용 안내");
+    el.innerHTML = `<div class="onb-inner">
+      <div class="onb-top"><span class="brand" style="font-size:20px">_밑줄.</span><button class="link-btn" id="onb-skip">건너뛰기</button></div>
+      <div class="onb-track" id="onb-track">${ONB_SLIDES.map((sl, i) => `<section class="onb-slide" aria-label="${i + 1} / ${ONB_SLIDES.length}">
+        <div class="onb-art">${sl.art}</div>
+        <span class="onb-step">${i + 1} / ${ONB_SLIDES.length}</span>
+        <h2>${sl.t}</h2><p>${esc(sl.d).replace(/\n/g, "<br>")}</p>
+      </section>`).join("")}</div>
+      <div class="onb-dots" id="onb-dots">${ONB_SLIDES.map((_, i) => `<span class="${i ? "" : "on"}"></span>`).join("")}</div>
+      <button class="btn block" id="onb-next">다음</button>
+    </div>`;
+    document.body.appendChild(el); document.body.style.overflow = "hidden";
+    const track = $("#onb-track", el), dots = [...el.querySelectorAll("#onb-dots span")], next = $("#onb-next", el);
+    let idx = 0;
+    const sync = () => {
+      idx = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+      dots.forEach((d, i) => d.classList.toggle("on", i === idx));
+      next.textContent = idx === ONB_SLIDES.length - 1 ? "첫 책 등록하기" : "다음";
+    };
+    track.addEventListener("scroll", () => requestAnimationFrame(sync), { passive: true });
+    const close = (thenAdd) => { onbDone(); S.onbOpen = false; el.remove(); document.body.style.overflow = ""; if (thenAdd) addBookChoice(); };
+    next.onclick = () => { if (idx >= ONB_SLIDES.length - 1) { ga.event("onboarding_done"); return close(true); } track.scrollTo({ left: (idx + 1) * track.clientWidth, behavior: "smooth" }); };
+    $("#onb-skip", el).onclick = () => { ga.event("onboarding_skip", { at: idx + 1 }); close(false); };
   }
 
   /* ---------- today's highlight (10+ highlights only) ---------- */
@@ -677,11 +703,13 @@ button.cover { padding: 0; cursor: pointer; }
 
     if (!S.loaded.books) return h + `<div class="loading">책장을 불러오는 중…</div>`;
     if (!books.length) {
-      return h + guideCardHTML() + `<section class="empty" style="padding-top:28px">
-        <button class="btn" data-act="add-book">${plusIcon()} 첫 책 등록하기</button>
+      return h + `<section class="empty">
+        <h2>아직 꽂힌 책이 없어요</h2>
+        <p>읽고 있는 책 한 권으로 시작해 보세요.</p>
+        <button class="btn" style="margin-top:6px" data-act="add-book">${plusIcon()} 첫 책 등록하기</button>
+        <button class="link-btn" data-act="onboarding">사용법 다시 보기</button>
       </section>`;
     }
-    h += guideCardHTML();
     h += `<div class="grid" style="margin-top:20px">`;
     for (const b of books) {
       const n = pagesOf(b.id).length;
@@ -825,6 +853,7 @@ button.cover { padding: 0; cursor: pointer; }
     const caret = qFocused ? document.activeElement.selectionStart : null;
     if (S.mode === "loading") { appEl.innerHTML = `<div class="loading">서재를 여는 중…</div>`; return; }
     if (S.mode === "auth") { appEl.innerHTML = viewAuth(); return; }
+    if (S.mode === "remote" && S.loaded.books && S.loaded.pages && !S.books.length && !S.onbOpen && !onbSeen() && !ED.el) setTimeout(() => showOnboarding(false), 0);
     appEl.innerHTML = S.view === "book" ? viewBook() : viewLibrary();
     hydrateImgs(appEl);
     appEl.querySelectorAll("canvas[data-crop]").forEach(c => { const p = S.pages.find(p => p.id === c.dataset.crop); if (p) paintCrop(c, p); });
@@ -1127,6 +1156,7 @@ button.cover { padding: 0; cursor: pointer; }
     if (a === "terms") return termsSheet();
     if (a === "report") { const pid = t.dataset.id; return confirmSheet("이 밑줄을 신고할까요?", "신고한 밑줄은 내 화면에서 바로 사라지고, 신고가 쌓이면 모두에게서 숨겨져요.", "신고하기", async () => { await store.report(pid, ""); ga.event("report"); toast("신고했어요."); await loadShared(S.bookId); }); }
     if (a === "add-book") return addBookChoice();
+    if (a === "onboarding") return showOnboarding(true);
     if (a === "calendar") { S.cal = null; ga.event("calendar_open"); return calendarSheet(); }
     if (a === "cal-prev" || a === "cal-next") { const d = new Date(S.cal.y, S.cal.m + (a === "cal-next" ? 1 : -1), 1); S.cal = { y: d.getFullYear(), m: d.getMonth(), sel: null }; return calendarSheet(); }
     if (a === "cal-day") { S.cal.sel = t.dataset.day; return calendarSheet(); }
