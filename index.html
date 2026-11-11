@@ -280,6 +280,11 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
 .browse-consent { margin-top: 14px; border-top: 0; }
 .browse-book { text-align: left; }
 .browse-book .cover { display: grid; }
+.cover .count-badge { position: absolute; right: 5px; top: 5px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: #ffd600; color: #111; font-size: 12px; font-weight: 800; display: grid; place-items: center; font-variant-numeric: tabular-nums; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.browse-book .cover { position: relative; }
+.ext-shot { border: 1px solid var(--line); background: var(--soft); overflow: hidden; }
+.ext-shot canvas { display: block; width: 100%; }
+.ext-memo { margin: 0; padding: 9px 12px; background: rgba(24,24,24,.72); color: #fff; font-size: 13.5px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
 .book-owner { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -4px; }
 .browse-note { border-left: 4px solid var(--memo); padding-left: 12px; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 92px); background: var(--fg); color: var(--ink-inv); padding: 10px 16px; border-radius: 999px; font-size: 13.5px; z-index: 60; max-width: calc(100% - 32px); text-align: center; }
@@ -827,7 +832,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
       h += `<section class="empty"><p>아직 이 책에 밑줄을 공유한 사람이 없어요.<br>첫 번째로 공유해 보세요.</p></section>`;
     } else {
       h += `<div class="cards">`;
-      for (const it of sh.items) h += extCardHTML(it, `<b>${esc(it.name)}</b>${it.mine ? ` <span class="chip">내 밑줄</span>` : ""}${it.page_no ? " · " + esc(it.page_no) + "쪽" : ""}`);
+      for (const it of sh.items) h += extCardHTML(it, `${it.mine ? `<span class="chip">내 밑줄</span> ` : ""}${it.page_no ? esc(it.page_no) + "쪽" : ""}`);
       h += `</div>`;
     }
     return h + `<p style="margin-top:20px"><button class="link-btn" data-act="terms">공유 이용 안내</button></p>`;
@@ -847,9 +852,9 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     S.ext[it.id] = { id: it.id, imageId: it.share_path ? "sb:" + it.share_path : "", imageUrl: "", strokes: [] };
     return `<article class="card mark-card ext-card">
       <div class="meta"><span>${metaLeft}</span><span>${fmtMD(Number(it.created_at))}</span></div>
-      <div class="shot-wrap${it.note ? " has-memo" : ""}">
+      <div class="ext-shot">
         ${it.share_path ? `<canvas data-crop="${esc(it.id)}" aria-label="밑줄 그은 부분"></canvas>` : `<p class="no-photo">사진 없음</p>`}
-        ${it.note ? `<p class="memo-over">${esc(it.note)}</p>` : ""}
+        ${it.note ? `<p class="ext-memo">${esc(it.note)}</p>` : ""}
       </div>
     </article>`;
   }
@@ -870,9 +875,8 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     for (const it of br.items) {
       const fake = { coverId: it.cover_path ? "sb:" + it.cover_path : "", title: it.title };
       h += `<button class="book browse-book" data-act="browse-book" data-id="${esc(it.id)}">
-        <span class="cover">${hasCover(fake) ? coverImg(fake) : `<span class="ph">${esc(it.title || "제목 없는 책")}</span>`}</span>
+        <span class="cover">${hasCover(fake) ? coverImg(fake) : `<span class="ph">${esc(it.title || "제목 없는 책")}</span>`}<span class="count-badge" aria-label="밑줄 ${it.shared}개">${it.shared}</span></span>
         <span class="book-title">${esc(it.title || "제목 없는 책")}</span>
-        <span class="book-owner">${esc(it.name)} · 밑줄 ${it.shared}</span>
       </button>`;
     }
     return h + `</div><p style="margin-top:22px"><button class="link-btn" data-act="terms">공유 이용 안내</button></p>`;
@@ -892,7 +896,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     const fake = { coverId: bb.cover_path ? "sb:" + bb.cover_path : "", title: bb.title };
     h += `<section class="book-head">
       <div class="cover">${hasCover(fake) ? coverImg(fake) : `<span class="ph" style="font-size:12px">${esc(bb.title || "제목 없는 책")}</span>`}</div>
-      <div><h1>${esc(bb.title || "제목 없는 책")}</h1>${bb.author ? `<div class="meta">${esc(bb.author)}</div>` : ""}<div class="count">${esc(bb.name)}의 밑줄 ${bb.total}개${bb.total > 10 ? " · 무작위 10개" : ""}</div></div>
+      <div><h1>${esc(bb.title || "제목 없는 책")}</h1>${bb.author ? `<div class="meta">${esc(bb.author)}</div>` : ""}<div class="count">공유된 밑줄 ${bb.total}개${bb.total > 10 ? " · 무작위 10개" : ""}</div></div>
     </section>`;
     if (!bb.notes.length) return h + `<section class="empty"><p>보여 줄 밑줄이 없어요.</p></section>`;
     h += `<div class="cards" style="margin-top:20px">`;
@@ -905,7 +909,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
       <ul class="terms">
         <li>밑줄 화면에서 ‘공유’를 켠 밑줄만 다른 사람에게 보여요. 기본은 꺼져 있어요.</li>
         <li>공유한 밑줄은 로그인한 사람이 ‘둘러보기’와 같은 책의 ‘같이 읽은 사람들’에서 볼 수 있어요.</li>
-        <li>보이는 것: 형광펜 그은 부분만 잘라 낸 사진, 메모, 쪽수, 날짜, 그 책의 제목·저자·표지, 내 이름. 원본 페이지 사진은 보이지 않아요.</li>
+        <li>보이는 것: 형광펜 그은 부분만 잘라 낸 사진, 메모, 쪽수, 날짜, 그 책의 제목·저자·표지. 이름과 원본 페이지 사진은 보이지 않아요.</li>
         <li>둘러보기에서는 한 책마다 무작위로 10개까지 보여요. 다른 사람의 밑줄은 볼 수만 있고 고칠 수 없어요.</li>
         <li>공유한 사진과 메모에 대한 책임은 올린 사람에게 있어요. 언제든 공유를 끄면 바로 보이지 않아요.</li>
       </ul>
