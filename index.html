@@ -212,6 +212,13 @@ button.cover { padding: 0; cursor: pointer; }
   background: color-mix(in srgb, var(--memo) 62%, transparent); backdrop-filter: blur(1.5px); -webkit-backdrop-filter: blur(1.5px);
   overflow-wrap: anywhere; white-space: pre-line; position: relative; z-index: 1; }
 @supports not (background: color-mix(in srgb, red 50%, transparent)) { .memo-over { background: rgba(255, 214, 0, .72); } }
+.choice { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; padding: 16px; border: 1.5px solid var(--line); border-radius: 14px; position: relative; overflow: hidden; cursor: pointer; }
+.choice:active { background: var(--soft); }
+.choice svg { width: 24px; height: 24px; flex: none; }
+.choice span { display: grid; gap: 2px; }
+.choice b { font-size: 15.5px; }
+.choice small { font-size: 12.5px; color: var(--muted); }
+.choice input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 92px); background: var(--fg); color: var(--ink-inv); padding: 10px 16px; border-radius: 999px; font-size: 13.5px; z-index: 60; max-width: calc(100% - 32px); text-align: center; }
 .loading { text-align: center; color: var(--muted); padding: 60px 0; font-size: 14px; }
 .busy { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.35); display: grid; place-items: center; }
@@ -536,7 +543,7 @@ button.cover { padding: 0; cursor: pointer; }
           <li><b>2</b><span>표지를 누르고 마음에 드는 페이지를 찍어요</span></li>
           <li><b>3</b><span>사진 위에 손가락으로 밑줄을 그어요</span></li>
         </ol>
-        <label class="btn file-btn" style="margin-top:10px">${cameraIcon()} 첫 책 등록하기<input type="file" accept="image/*" data-file="cover"></label>
+        <button class="btn" style="margin-top:10px" data-act="add-book">${plusIcon()} 첫 책 등록하기</button>
       </section>`;
     }
     h += `<div class="grid" style="margin-top:20px">`;
@@ -547,7 +554,7 @@ button.cover { padding: 0; cursor: pointer; }
         <button class="book-link" data-act="open-book" data-id="${esc(b.id)}"><span class="book-title">${esc(titleOf(b))}</span></button>
       </div>`;
     }
-    h += `</div><label class="fab file-btn">${plusIcon()} 책 등록<input type="file" accept="image/*" data-file="cover"></label>`;
+    h += `</div><button class="fab" data-act="add-book">${plusIcon()} 책 등록</button>`;
     return h;
   }
 
@@ -689,18 +696,25 @@ button.cover { padding: 0; cursor: pointer; }
   }
   const closeSheet = () => { layer.innerHTML = ""; };
 
+  // two ways to add a book: a cover photo, or just the title typed in
+  function addBookChoice() {
+    openSheet(`<h3>책 등록</h3>
+      <label class="choice file-btn">${cameraIcon()}<span><b>표지 사진으로</b><small>사진을 찍거나 앨범에서 골라요</small></span><input type="file" accept="image/*" data-file="cover"></label>
+      <button class="choice" data-act="add-book-text">${penIcon()}<span><b>제목 입력으로</b><small>사진 없이 제목만 적어요</small></span></button>
+      <button class="btn ghost block" data-act="close" style="border-color:transparent">취소</button>`);
+  }
   function bookSheet(book, opts = {}) {
     let coverBlob = null;
     const editing = !!book;
     const coverHTML = hasCover(book) ? coverImg(book) : `<span class="ph" style="font-size:12px;color:var(--muted)">표지</span>`;
     const shootBtn = `<label class="btn ghost file-btn" style="height:38px;font-size:14px">${cameraIcon()} 표지 ${editing ? "다시 " : ""}찍기<input id="cover-file" type="file" accept="image/*"></label>`;
     openSheet(`
-      <h3>${opts.first ? "어떤 책인가요?" : editing ? "책 정보 고치기" : "책 등록"}</h3>
-      ${opts.big ? `<div class="cover cover-big" id="cv">${coverHTML}</div><div style="display:flex;justify-content:center">${shootBtn}</div>` : `<div class="shot">
+      <h3>${opts.first || opts.textOnly ? "어떤 책인가요?" : editing ? "책 정보 고치기" : "책 등록"}</h3>
+      ${opts.textOnly ? `<div id="cv" hidden></div><input id="cover-file" type="file" hidden>` : opts.big ? `<div class="cover cover-big" id="cv">${coverHTML}</div><div style="display:flex;justify-content:center">${shootBtn}</div>` : `<div class="shot">
         <div class="cover" id="cv">${coverHTML}</div>
         <div class="hint"><span>표지를 정면에서 찍으면 책장이 깔끔해져요.</span>${shootBtn}</div>
       </div>`}
-      <div class="field"><label for="bt">제목</label><input id="bt" maxlength="120" placeholder="표지를 보고 제목을 적어 주세요" value="${esc(book ? book.title : "")}"></div>
+      <div class="field"><label for="bt">제목</label><input id="bt" maxlength="120" placeholder="${opts.textOnly ? "예: 소년이 온다" : "표지를 보고 제목을 적어 주세요"}" value="${esc(book ? book.title : "")}"></div>
       <div class="field"><label for="ba">저자 (선택)</label><input id="ba" maxlength="80" placeholder="공유할 때 출처에 함께 표시돼요" value="${esc(book ? (book.author || "") : "")}"></div>
       <div class="sheet-actions"><button class="btn ghost" data-act="close">${opts.first ? "나중에" : "취소"}</button><button class="btn" id="bsave">${editing ? "저장" : "책장에 꽂기"}</button></div>`,
       (el) => {
@@ -708,7 +722,7 @@ button.cover { padding: 0; cursor: pointer; }
           const f = e.target.files[0]; if (!f) return;
           try { const r = await shrink(f, 600); coverBlob = r.blob; $("#cv", el).innerHTML = `<img src="${URL.createObjectURL(r.blob)}" alt="">`; } catch { toast("사진을 읽지 못했어요."); }
         });
-        if (opts.big) setTimeout(() => { const t = $("#bt", el); if (t && !t.value) t.focus(); }, 250);
+        if (opts.big || opts.textOnly) setTimeout(() => { const t = $("#bt", el); if (t && !t.value) t.focus(); }, 250);
         $("#bsave", el).addEventListener("click", async () => {
           const title = $("#bt", el).value.trim(), author = $("#ba", el).value.trim();
           if (!title) { toast("제목을 적어 주세요."); $("#bt", el).focus(); return; }
@@ -963,7 +977,8 @@ button.cover { padding: 0; cursor: pointer; }
     if (a === "shared-retry") return loadShared(S.bookId);
     if (a === "terms") return termsSheet();
     if (a === "report") { const pid = t.dataset.id; return confirmSheet("이 밑줄을 신고할까요?", "신고한 밑줄은 내 화면에서 바로 사라지고, 신고가 쌓이면 모두에게서 숨겨져요.", "신고하기", async () => { await store.report(pid, ""); toast("신고했어요."); await loadShared(S.bookId); }); }
-    if (a === "add-book") return bookSheet(null);
+    if (a === "add-book") return addBookChoice();
+    if (a === "add-book-text") return bookSheet(null, { textOnly: true });
     if (a === "open-book") { S.view = "book"; S.bookId = t.dataset.id; S.bookTab = "mine"; render(); window.scrollTo(0, 0); loadShared(S.bookId); return; }
     if (a === "home") { S.view = "library"; render(); window.scrollTo(0, 0); return; }
     if (a === "book-menu") return bookMenu();
@@ -1001,7 +1016,7 @@ button.cover { padding: 0; cursor: pointer; }
   });
   document.addEventListener("input", (e) => { if (e.target.id === "q") { S.q = e.target.value; render(); } });
   document.addEventListener("change", (e) => {
-    if (e.target.dataset && e.target.dataset.file === "cover") { const f = e.target.files[0]; e.target.value = ""; if (f) addBookFromFile(f); return; }
+    if (e.target.dataset && e.target.dataset.file === "cover") { const f = e.target.files[0]; e.target.value = ""; if (f) { closeSheet(); addBookFromFile(f); } return; }
     if (e.target.dataset && e.target.dataset.file === "backup") { const f = e.target.files[0]; e.target.value = ""; if (f) importBackup(f); return; }
     if (e.target.dataset && e.target.dataset.file === "page") { const f = e.target.files[0]; e.target.value = ""; if (f) { S.bookId = e.target.dataset.book; addPageFromFile(f); } return; }
     if (e.target.id === "page-file") { const f = e.target.files[0]; e.target.value = ""; if (f) addPageFromFile(f); }
@@ -1013,6 +1028,7 @@ button.cover { padding: 0; cursor: pointer; }
   function cameraIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`; }
   // cover button: a highlighter stroke across the top-left, camera tucked bottom-right
   function markCameraIcon() { return `<svg viewBox="0 0 30 30" aria-hidden="true"><path d="M6 10.5 L15 8.5" stroke="#ffd600" stroke-width="3" stroke-linecap="round"/><g transform="translate(11 11) scale(.68)" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></g></svg>`; }
+  function penIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>`; }
   function backIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>`; }
   function dotsIcon() { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>`; }
   function undoIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6L4 11l5 5"/><path d="M4 11h10a5 5 0 010 10h-3"/></svg>`; }
