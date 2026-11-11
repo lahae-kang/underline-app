@@ -214,6 +214,13 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
   overflow-wrap: anywhere; white-space: pre-line; position: relative; z-index: 1;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .mark-card .meta > span:first-child { min-width: 0; }
+.tag-over { justify-self: end; align-self: start; margin: 6px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; max-width: 70%; position: relative; z-index: 1; }
+.tag-over span { font-size: 11px; font-weight: 600; color: #fff; background: rgba(24,24,24,.6); padding: 2px 7px; border-radius: 999px; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+.tag-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; align-items: center; }
+.tag-chip { font-size: 12.5px; font-weight: 500; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.tag-chip.on { background: var(--fg); color: var(--ink-inv); border-color: var(--fg); }
+.tag-edit { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
+.tag-hint { font-size: 12px; color: var(--muted); }
 .mc-right { display: inline-flex; align-items: center; gap: 8px; flex: none; white-space: nowrap; }
 .share-pill { white-space: nowrap; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 .share-pill.on { background: var(--fg); color: var(--ink-inv); border-color: var(--fg); }
@@ -497,11 +504,11 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     const nid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
     const blobUrls = new Map();
     const bookIn = (r) => ({ id: r.id, title: r.title || "", author: r.author || "", titleKey: r.title_key || "", coverId: r.cover_path ? "sb:" + r.cover_path : "", ocr: r.ocr || "", browseHidden: !!r.browse_hidden, createdAt: Number(r.created_at) });
-    const pageIn = (r) => ({ id: r.id, bookId: r.book_id, imageId: r.image_path ? "sb:" + r.image_path : "", w: r.w, h: r.h, strokes: r.strokes || [], pageNo: r.page_no || "", quote: r.quote || "", note: r.note || "", shared: !!r.shared, sharePath: r.share_path ? "sb:" + r.share_path : "", ocr: r.ocr || "", createdAt: Number(r.created_at), updatedAt: r.updated_at ? Number(r.updated_at) : null });
+    const pageIn = (r) => ({ id: r.id, bookId: r.book_id, imageId: r.image_path ? "sb:" + r.image_path : "", w: r.w, h: r.h, strokes: r.strokes || [], pageNo: r.page_no || "", quote: r.quote || "", note: r.note || "", tags: Array.isArray(r.tags) ? r.tags : [], shared: !!r.shared, sharePath: r.share_path ? "sb:" + r.share_path : "", ocr: r.ocr || "", createdAt: Number(r.created_at), updatedAt: r.updated_at ? Number(r.updated_at) : null });
     const path = (id) => (id && id.startsWith("sb:")) ? id.slice(3) : null;
     const bookOut = (d) => { const o = {}; if ("title" in d) o.title = d.title; if ("author" in d) o.author = d.author; if ("coverId" in d) o.cover_path = path(d.coverId); if ("browseHidden" in d) o.browse_hidden = d.browseHidden; if ("ocr" in d) o.ocr = d.ocr; if ("createdAt" in d) o.created_at = d.createdAt; return o; };
     const pageOut = (d) => {
-      const o = {}, m = { bookId: "book_id", w: "w", h: "h", strokes: "strokes", pageNo: "page_no", quote: "quote", note: "note", shared: "shared", ocr: "ocr", createdAt: "created_at", updatedAt: "updated_at" };
+      const o = {}, m = { bookId: "book_id", w: "w", h: "h", strokes: "strokes", pageNo: "page_no", quote: "quote", note: "note", tags: "tags", shared: "shared", ocr: "ocr", createdAt: "created_at", updatedAt: "updated_at" };
       for (const k in m) if (k in d) o[m[k]] = d[k];
       if ("imageId" in d) o.image_path = path(d.imageId);
       if ("sharePath" in d) o.share_path = path(d.sharePath);
@@ -743,19 +750,25 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
   function matches(p) {
     const q = S.q.trim().toLowerCase(); if (!q) return true;
     const b = S.books.find(b => b.id === p.bookId) || {};
-    return [p.note, b.title, b.author, p.pageNo].some(v => String(v || "").toLowerCase().includes(q));
+    return [p.note, b.title, b.author, p.pageNo, (p.tags || []).join(" ")].some(v => String(v || "").toLowerCase().includes(q));
   }
   // 밑줄 모아보기 card: book title + month.day, memo laid over the photo on a see-through box in the highlight colour
-  function markCardHTML(p) {
+  const myTags = () => [...new Set(S.pages.flatMap(p => p.tags || []))].sort((a, b) => a.localeCompare(b, "ko"));
+  function markCardHTML(p, inBook) {
     const b = S.books.find(b => b.id === p.bookId) || {};
+    const left = inBook ? (p.pageNo ? esc(p.pageNo) + "쪽" : "") : `<b>${esc(titleOf(b))}</b>`;
+    const tags = (p.tags || []).length ? `<span class="tag-over">${p.tags.map(t => `<span>#${esc(t)}</span>`).join("")}</span>` : "";
     return `<div class="card mark-card">
-      <div class="meta"><span><b>${esc(titleOf(b))}</b></span><span class="mc-right">${fmtMD(p.createdAt)}<button class="share-pill${p.shared ? " on" : ""}" data-act="toggle-share" data-id="${esc(p.id)}" aria-pressed="${p.shared}">${p.shared ? "공개" : "비공개"}</button></span></div>
+      <div class="meta"><span>${left}</span><span class="mc-right">${fmtMD(p.createdAt)}${markCount(p) ? `<button class="share-pill${p.shared ? " on" : ""}" data-act="toggle-share" data-id="${esc(p.id)}" aria-pressed="${p.shared}">${p.shared ? "공개" : "비공개"}</button>` : ""}</span></div>
       <button class="shot-wrap${p.note ? " has-memo" : ""}" data-act="edit-page" data-id="${esc(p.id)}" aria-label="밑줄 열기">
         <canvas data-crop="${esc(p.id)}" aria-label="밑줄 그은 부분"></canvas>
+        ${tags}
         ${p.note ? `<p class="memo-over">${esc(p.note)}</p>` : ""}
       </button>
+      ${markCount(p) ? "" : `<span class="nomark">아직 밑줄이 없어요 · 사진을 눌러 긋기</span>`}
     </div>`;
   }
+
   function cardHTML(p, showBook) {
     const b = S.books.find(b => b.id === p.bookId) || {};
     const meta = `<div class="meta"><span>${showBook ? `<b>${esc(titleOf(b))}</b> · ` : ""}${p.pageNo ? esc(p.pageNo) + "쪽" : "쪽수 없음"}${p.shared ? ` <span class="chip">공유 중</span>` : ""}</span><span>${fmtDate(p.createdAt)}</span></div>`;
@@ -769,7 +782,9 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
   function viewMarks() {
     let h = `<label class="search"><span aria-hidden="true">${searchIcon()}</span><input id="q" type="search" placeholder="메모, 책 제목으로 찾기" value="${esc(S.q)}" autocomplete="off"></label>`;
     if (!S.loaded.pages) return h + `<div class="loading">밑줄을 불러오는 중…</div>`;
-    const list = S.pages.filter(p => markCount(p) && matches(p)).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const all = myTags(); S.tagSel = (S.tagSel || []).filter(t => all.includes(t));
+    if (all.length) h += `<div class="tag-filter" role="group" aria-label="태그로 골라 보기">${all.map(t => `<button class="tag-chip${S.tagSel.includes(t) ? " on" : ""}" data-act="tag-filter" data-tag="${esc(t)}" aria-pressed="${S.tagSel.includes(t)}">#${esc(t)}</button>`).join("")}${S.tagSel.length ? `<button class="link-btn" data-act="tag-clear">모두 보기</button>` : ""}</div>`;
+    const list = S.pages.filter(p => markCount(p) && matches(p) && (!S.tagSel.length || (p.tags || []).some(t => S.tagSel.includes(t)))).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     if (!list.length) return h + `<section class="empty"><h2>${S.q ? "찾는 밑줄이 없어요" : "모아 볼 밑줄이 아직 없어요"}</h2><p>${S.q ? "다른 단어로 찾아보세요. 밑줄 문장을 옮겨 적어 두면 검색에 걸려요." : "책장에서 책을 열고 페이지를 찍어 밑줄을 그어 보세요."}</p></section>`;
     h += `<div class="cards" style="margin-top:18px">`;
     for (const p of list) h += markCardHTML(p);
@@ -796,8 +811,8 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     } else if (!ps.length) {
       h += `<section class="empty"><h2>첫 밑줄을 그어 볼까요</h2><p>마음에 드는 문장이 있는 페이지를 찍으면, 그 위에 바로 밑줄을 그을 수 있어요.</p></section>`;
     } else {
-      h += `<div class="section-label"><span>밑줄 페이지</span><span>최근순</span></div><div class="cards">`;
-      for (const p of ps) h += cardHTML(p, false);
+      h += `<div class="cards" style="margin-top:18px">`;
+      for (const p of ps) h += markCardHTML(p, true);
       h += `</div>`;
     }
     h += `<label class="fab file-btn">${cameraIcon()} 페이지 추가<input id="page-file" type="file" accept="image/*"></label>`;
@@ -1040,6 +1055,10 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
       </div>
       <div class="ed-fields">
         <div class="field" style="max-width:140px"><label for="ed-pg">쪽수</label><input id="ed-pg" inputmode="numeric" maxlength="8" placeholder="예: 134" value="${esc(p.pageNo || "")}"></div>
+        <div class="field"><label for="ed-tag">태그</label>
+          <div class="tag-edit" id="ed-tags"></div>
+          <input id="ed-tag" maxlength="12" placeholder="새 태그 적고 엔터 (여러 개 가능)" autocomplete="off" enterkeyhint="done">
+        </div>
         <div class="field"><label for="ed-n">메모</label><textarea id="ed-n" rows="3" maxlength="2000" placeholder="밑줄 그은 이유">${esc(p.note || "")}</textarea></div>
         ${store && store.sharedFor ? `<label class="share-row" for="ed-share"><span><b>같은 책 독자에게 공유</b><small id="ed-share-hint"></small></span><input type="checkbox" class="switch-input" id="ed-share" role="switch" ${p.shared ? "checked" : ""}></label>` : ""}
       </div></div>`;
@@ -1084,6 +1103,24 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
       $("#ed-share-hint", el).textContent = "켜면 형광펜 그은 부분만 잘라서 메모와 함께 다른 사람에게 보여요";
     };
     if (shareEl) { syncShare(); noteEl.addEventListener("input", syncShare); shareEl.addEventListener("change", () => { ED.dirty = true; }); }
+    // tags: tap a chip to add/remove, or type a new one
+    ED.tags = [...(p.tags || [])];
+    const tagBox = $("#ed-tags", el), tagIn = $("#ed-tag", el);
+    const drawTags = () => {
+      const pool = [...new Set([...myTags(), ...ED.tags])].sort((a, b) => a.localeCompare(b, "ko"));
+      tagBox.innerHTML = pool.map(t => `<button type="button" class="tag-chip${ED.tags.includes(t) ? " on" : ""}" data-t="${esc(t)}" aria-pressed="${ED.tags.includes(t)}">#${esc(t)}</button>`).join("") || `<small class="tag-hint">자주 쓰는 주제를 태그로 달아 두면 밑줄 모아보기에서 골라 볼 수 있어요</small>`;
+    };
+    const addTag = (raw) => {
+      const t = String(raw || "").replace(/^#+/, "").replace(/[\s,]+/g, "").slice(0, 12);
+      if (!t) return; if (!ED.tags.includes(t)) { if (ED.tags.length >= 8) { toast("태그는 8개까지 달 수 있어요."); return; } ED.tags.push(t); ED.dirty = true; } drawTags();
+    };
+    tagBox.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-t]"); if (!b) return;
+      const t = b.dataset.t; ED.tags = ED.tags.includes(t) ? ED.tags.filter(x => x !== t) : [...ED.tags, t]; ED.dirty = true; drawTags();
+    });
+    tagIn.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(tagIn.value); tagIn.value = ""; } });
+    tagIn.addEventListener("blur", () => { if (tagIn.value.trim()) { addTag(tagIn.value); tagIn.value = ""; } });
+    drawTags();
     const del = $("#ed-del", el);
     if (del) del.onclick = () => confirmSheet("이 페이지를 지울까요?", "사진과 밑줄, 메모가 함께 지워지고 되돌릴 수 없어요.", "지우기", async () => { ga.event("delete_page"); await store.deletePage(ED.id); closeEditor(true); toast("페이지를 지웠어요."); });
 
@@ -1147,7 +1184,8 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
   }
   async function saveEditor() {
     const el = ED.el;
-    const d = { strokes: ED.strokes, pageNo: $("#ed-pg", el).value.trim(), note: $("#ed-n", el).value.trim(), updatedAt: Date.now() };
+    const tagIn = $("#ed-tag", el); if (tagIn && tagIn.value.trim()) { const t = tagIn.value.replace(/^#+/, "").replace(/[\s,]+/g, "").slice(0, 12); if (t && !ED.tags.includes(t)) ED.tags.push(t); }
+    const d = { strokes: ED.strokes, pageNo: $("#ed-pg", el).value.trim(), note: $("#ed-n", el).value.trim(), tags: ED.tags || [], updatedAt: Date.now() };
     const shareEl = $("#ed-share", el);
     const wantShare = shareEl ? shareEl.checked : null;
     if (wantShare && !ED.strokes.length) toast("형광펜을 그어야 공유할 수 있어요.");
@@ -1275,6 +1313,8 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     if (a === "terms") return termsSheet();
     if (a === "report") { const pid = t.dataset.id; return confirmSheet("이 밑줄을 신고할까요?", "신고한 밑줄은 내 화면에서 바로 사라지고, 신고가 쌓이면 모두에게서 숨겨져요.", "신고하기", async () => { await store.report(pid, ""); ga.event("report"); toast("신고했어요."); await loadShared(S.bookId); }); }
     if (a === "add-book") return addBookChoice();
+    if (a === "tag-filter") { const tg = t.dataset.tag; S.tagSel = (S.tagSel || []).includes(tg) ? S.tagSel.filter(x => x !== tg) : [...(S.tagSel || []), tg]; ga.event("tag_filter"); render(); return; }
+    if (a === "tag-clear") { S.tagSel = []; render(); return; }
     if (a === "toggle-share") { const p = S.pages.find(p => p.id === t.dataset.id); if (p) setShare(p.id, !p.shared); return; }
     if (a === "onboarding") return showOnboarding(true);
     if (a === "calendar") { S.cal = null; ga.event("calendar_open"); return calendarSheet(); }
