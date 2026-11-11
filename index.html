@@ -71,8 +71,8 @@ input, textarea { font: inherit; color: var(--fg); }
 .book-title { font-weight: 600; font-size: 12px; line-height: 1.3; letter-spacing: -0.01em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .book-link { text-align: left; display: grid; gap: 2px; min-width: 0; }
 .book-count { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.add-chip { position: absolute; right: 4px; bottom: 4px; width: 24px; height: 24px; border-radius: 50%; background: var(--fg); color: var(--ink-inv); display: grid; place-items: center; pointer-events: none; }
-.add-chip svg { width: 13px; height: 13px; }
+.add-chip { position: absolute; right: 5px; bottom: 5px; width: 30px; height: 30px; border-radius: 50%; background: var(--fg); color: var(--ink-inv); pointer-events: none; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.add-chip svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 
 /* Empty state */
 .empty { text-align: center; padding: 56px 12px 24px; display: grid; gap: 14px; justify-items: center; }
@@ -533,7 +533,7 @@ button.cover { padding: 0; cursor: pointer; }
     for (const b of books) {
       const n = pagesOf(b.id).length;
       h += `<div class="book">
-        <label class="cover file-btn" aria-label="${esc(titleOf(b))}에 밑줄 페이지 추가">${hasCover(b) ? coverImg(b) : `<span class="ph">${esc(titleOf(b))}</span>`}<span class="add-chip">${cameraIcon()}</span><input type="file" accept="image/*" data-file="page" data-book="${esc(b.id)}"></label>
+        <label class="cover file-btn" aria-label="${esc(titleOf(b))}에 밑줄 페이지 추가">${hasCover(b) ? coverImg(b) : `<span class="ph">${esc(titleOf(b))}</span>`}<span class="add-chip">${markCameraIcon()}</span><input type="file" accept="image/*" data-file="page" data-book="${esc(b.id)}"></label>
         <button class="book-link" data-act="open-book" data-id="${esc(b.id)}"><span class="book-title">${esc(titleOf(b))}</span></button>
       </div>`;
     }
@@ -989,6 +989,8 @@ button.cover { padding: 0; cursor: pointer; }
   /* ---------- icons ---------- */
   function plusIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`; }
   function cameraIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`; }
+  // cover button: a highlighter stroke across the top-left, camera tucked bottom-right
+  function markCameraIcon() { return `<svg viewBox="0 0 30 30" aria-hidden="true"><path d="M-3 10.5 L14 7.5" stroke="#ffd600" stroke-width="4.5" stroke-linecap="round" opacity=".95"/><g transform="translate(11.5 11) scale(.7)" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></g></svg>`; }
   function backIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>`; }
   function dotsIcon() { return `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>`; }
   function undoIcon() { return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6L4 11l5 5"/><path d="M4 11h10a5 5 0 010 10h-3"/></svg>`; }
