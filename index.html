@@ -207,11 +207,16 @@ button.cover { padding: 0; cursor: pointer; }
 .shot-wrap { display: grid; background: var(--soft); border: 1px solid var(--line); }
 .shot-wrap > * { grid-area: 1 / 1; }
 .shot-wrap canvas { border: 0; align-self: start; }
-.shot-wrap.has-memo > * { align-self: center; }
-.memo-over { align-self: end; margin: 8px; padding: 10px 12px; color: #111; font-size: 14.5px; font-weight: 600; line-height: 1.5;
-  background: color-mix(in srgb, var(--memo) 62%, transparent); backdrop-filter: blur(1.5px); -webkit-backdrop-filter: blur(1.5px);
-  overflow-wrap: anywhere; white-space: pre-line; position: relative; z-index: 1; }
-@supports not (background: color-mix(in srgb, red 50%, transparent)) { .memo-over { background: rgba(255, 214, 0, .72); } }
+button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
+.shot-wrap.has-memo { min-height: 64px; }
+.memo-over { align-self: end; margin: 0; padding: 7px 10px; color: #fff; font-size: 13px; font-weight: 500; line-height: 1.45;
+  background: rgba(24, 24, 24, .58); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  overflow-wrap: anywhere; white-space: pre-line; position: relative; z-index: 1;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.mark-card .meta > span:first-child { min-width: 0; }
+.mc-right { display: inline-flex; align-items: center; gap: 8px; flex: none; white-space: nowrap; }
+.share-pill { white-space: nowrap; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.share-pill.on { background: var(--fg); color: var(--ink-inv); border-color: var(--fg); }
 .choice { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; padding: 16px; border: 1.5px solid var(--line); border-radius: 14px; position: relative; overflow: hidden; cursor: pointer; }
 .choice:active { background: var(--soft); }
 .choice svg { width: 24px; height: 24px; flex: none; }
@@ -264,6 +269,12 @@ button.cover { padding: 0; cursor: pointer; }
 .cal-list { display: grid; gap: 6px; }
 .cal-list small { font-size: 12.5px; color: var(--muted); }
 .cal-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; text-align: left; }
+.tabs { gap: 16px; }
+.browse-consent { margin-top: 14px; border-top: 0; }
+.browse-book { text-align: left; }
+.browse-book .cover { display: grid; }
+.book-owner { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -4px; }
+.browse-note { border-left: 4px solid var(--memo); padding-left: 12px; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 92px); background: var(--fg); color: var(--ink-inv); padding: 10px 16px; border-radius: 999px; font-size: 13.5px; z-index: 60; max-width: calc(100% - 32px); text-align: center; }
 .loading { text-align: center; color: var(--muted); padding: 60px 0; font-size: 14px; }
 .busy { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.35); display: grid; place-items: center; }
@@ -485,14 +496,15 @@ button.cover { padding: 0; cursor: pointer; }
   function cloudStore(uid) {
     const nid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
     const blobUrls = new Map();
-    const bookIn = (r) => ({ id: r.id, title: r.title || "", author: r.author || "", titleKey: r.title_key || "", coverId: r.cover_path ? "sb:" + r.cover_path : "", ocr: r.ocr || "", createdAt: Number(r.created_at) });
-    const pageIn = (r) => ({ id: r.id, bookId: r.book_id, imageId: r.image_path ? "sb:" + r.image_path : "", w: r.w, h: r.h, strokes: r.strokes || [], pageNo: r.page_no || "", quote: r.quote || "", note: r.note || "", shared: !!r.shared, ocr: r.ocr || "", createdAt: Number(r.created_at), updatedAt: r.updated_at ? Number(r.updated_at) : null });
+    const bookIn = (r) => ({ id: r.id, title: r.title || "", author: r.author || "", titleKey: r.title_key || "", coverId: r.cover_path ? "sb:" + r.cover_path : "", ocr: r.ocr || "", browseHidden: !!r.browse_hidden, createdAt: Number(r.created_at) });
+    const pageIn = (r) => ({ id: r.id, bookId: r.book_id, imageId: r.image_path ? "sb:" + r.image_path : "", w: r.w, h: r.h, strokes: r.strokes || [], pageNo: r.page_no || "", quote: r.quote || "", note: r.note || "", shared: !!r.shared, sharePath: r.share_path ? "sb:" + r.share_path : "", ocr: r.ocr || "", createdAt: Number(r.created_at), updatedAt: r.updated_at ? Number(r.updated_at) : null });
     const path = (id) => (id && id.startsWith("sb:")) ? id.slice(3) : null;
-    const bookOut = (d) => { const o = {}; if ("title" in d) o.title = d.title; if ("author" in d) o.author = d.author; if ("coverId" in d) o.cover_path = path(d.coverId); if ("ocr" in d) o.ocr = d.ocr; if ("createdAt" in d) o.created_at = d.createdAt; return o; };
+    const bookOut = (d) => { const o = {}; if ("title" in d) o.title = d.title; if ("author" in d) o.author = d.author; if ("coverId" in d) o.cover_path = path(d.coverId); if ("browseHidden" in d) o.browse_hidden = d.browseHidden; if ("ocr" in d) o.ocr = d.ocr; if ("createdAt" in d) o.created_at = d.createdAt; return o; };
     const pageOut = (d) => {
       const o = {}, m = { bookId: "book_id", w: "w", h: "h", strokes: "strokes", pageNo: "page_no", quote: "quote", note: "note", shared: "shared", ocr: "ocr", createdAt: "created_at", updatedAt: "updated_at" };
       for (const k in m) if (k in d) o[m[k]] = d[k];
       if ("imageId" in d) o.image_path = path(d.imageId);
+      if ("sharePath" in d) o.share_path = path(d.sharePath);
       return o;
     };
     const must = ({ data, error }) => { if (error) throw error; return data; };
@@ -506,7 +518,7 @@ button.cover { padding: 0; cursor: pointer; }
       subscribe(f, onErr) { cb = f; emit().catch(e => onErr && onErr(e)); },
       async upload(blob, kind) {
         const type = blob.type || "image/jpeg", ext = type === "image/webp" ? ".webp" : ".jpg";
-        const pre = kind === "page" ? "p2-" : kind === "crop" ? "p2c-" : kind === "cover" ? "c2-" : "";
+        const pre = kind === "page" ? "p2-" : kind === "crop" ? "p2c-" : kind === "cover" ? "c2-" : kind === "share" ? "s2-" : "";
         const key = uid + "/" + pre + nid() + ext;
         must(await sb.storage.from("photos").upload(key, blob, { contentType: type, upsert: false }));
         const url = URL.createObjectURL(blob); blobUrls.set(key, url);
@@ -523,16 +535,20 @@ button.cover { padding: 0; cursor: pointer; }
       async addBook(d) { const r = must(await sb.from("books").insert(bookOut(d)).select("id").single()); await emit(); return r.id; },
       async updateBook(id, d) { must(await sb.from("books").update(bookOut(d)).eq("id", id)); await emit(); },
       async deleteBook(id) {
-        for (const p of S.pages.filter(p => p.bookId === id)) await this.deleteImage(p.imageId);
+        for (const p of S.pages.filter(p => p.bookId === id)) { await this.deleteImage(p.imageId); if (p.sharePath) await this.deleteImage(p.sharePath); }
         const b = S.books.find(b => b.id === id); if (b) await this.deleteImage(b.coverId);
         must(await sb.from("books").delete().eq("id", id)); await emit();
       },
       async addPage(d) { const r = must(await sb.from("pages").insert(pageOut(d)).select("id").single()); await emit(); return r.id; },
       async updatePage(id, d) { must(await sb.from("pages").update(pageOut(d)).eq("id", id)); await emit(); },
       async deletePage(id) {
-        const p = S.pages.find(p => p.id === id); if (p) await this.deleteImage(p.imageId);
+        const p = S.pages.find(p => p.id === id); if (p) { await this.deleteImage(p.imageId); if (p.sharePath) await this.deleteImage(p.sharePath); }
         must(await sb.from("pages").delete().eq("id", id)); await emit();
       },
+      async browseBooks() { return must(await sb.rpc("browse_books")) || []; },
+      async browseNotes(bookId) { return must(await sb.rpc("browse_book_notes", { p_book: bookId })); },
+      async getBrowsePublic() { const r = must(await sb.from("profiles").select("browse_public").eq("id", uid).maybeSingle()); return !!(r && r.browse_public); },
+      async setBrowsePublic(v) { must(await sb.from("profiles").upsert({ id: uid, username: S.user || "", browse_public: !!v, updated_at: new Date().toISOString() })); },
       async sharedFor(bookId) { return must(await sb.rpc("shared_for_book", { p_book: bookId })) || { readers: 0, items: [] }; },
       async report(pageId, reason) { must(await sb.rpc("report_page", { p_page: pageId, p_reason: reason || "" })); }
     };
@@ -693,10 +709,12 @@ button.cover { padding: 0; cursor: pointer; }
       <nav class="tabs" role="tablist">
         <button class="tab" role="tab" data-act="tab" data-tab="books" aria-selected="${S.tab === "books"}">책장</button>
         <button class="tab" role="tab" data-act="tab" data-tab="marks" aria-selected="${S.tab === "marks"}">밑줄 모아보기</button>
+        <button class="tab" role="tab" data-act="tab" data-tab="browse" aria-selected="${S.tab === "browse"}">둘러보기</button>
         <button class="cal-btn" data-act="calendar" aria-label="독서 기록 달력">${calIcon()}</button>
       </nav>`);
     if (S.localCount) h += `<div class="migrate"><span>로그인 전에 이 폰에 남긴 책 ${S.localCount}권이 있어요. 계정으로 옮기면 다른 기기에서도 볼 수 있어요.</span><button class="btn" data-act="migrate">계정으로 옮기기</button></div>`;
     if (S.err) h += `<p class="notice">${esc(S.err)}</p>`;
+    if (S.tab === "browse") return h + viewBrowse();
     if (S.loaded.pages) h += todayMarkHTML();
 
     if (S.tab === "marks") return h + viewMarks();
@@ -730,14 +748,13 @@ button.cover { padding: 0; cursor: pointer; }
   // 밑줄 모아보기 card: book title + month.day, memo laid over the photo on a see-through box in the highlight colour
   function markCardHTML(p) {
     const b = S.books.find(b => b.id === p.bookId) || {};
-    const col = (MARK_COLORS[(p.strokes && p.strokes[0] && p.strokes[0].c) || "y"] || MARK_COLORS.y).css;
-    return `<button class="card mark-card" data-act="edit-page" data-id="${esc(p.id)}">
-      <div class="meta"><span><b>${esc(titleOf(b))}</b>${p.shared ? ` <span class="chip">공유 중</span>` : ""}</span><span>${fmtMD(p.createdAt)}</span></div>
-      <div class="shot-wrap${p.note ? " has-memo" : ""}">
+    return `<div class="card mark-card">
+      <div class="meta"><span><b>${esc(titleOf(b))}</b></span><span class="mc-right">${fmtMD(p.createdAt)}<button class="share-pill${p.shared ? " on" : ""}" data-act="toggle-share" data-id="${esc(p.id)}" aria-pressed="${p.shared}">${p.shared ? "공개" : "비공개"}</button></span></div>
+      <button class="shot-wrap${p.note ? " has-memo" : ""}" data-act="edit-page" data-id="${esc(p.id)}" aria-label="밑줄 열기">
         <canvas data-crop="${esc(p.id)}" aria-label="밑줄 그은 부분"></canvas>
-        ${p.note ? `<p class="memo-over" style="--memo:${col}">${esc(p.note)}</p>` : ""}
-      </div>
-    </button>`;
+        ${p.note ? `<p class="memo-over">${esc(p.note)}</p>` : ""}
+      </button>
+    </div>`;
   }
   function cardHTML(p, showBook) {
     const b = S.books.find(b => b.id === p.bookId) || {};
@@ -795,14 +812,7 @@ button.cover { padding: 0; cursor: pointer; }
       h += `<section class="empty"><p>아직 이 책에 밑줄을 공유한 사람이 없어요.<br>첫 번째로 공유해 보세요.</p></section>`;
     } else {
       h += `<div class="cards">`;
-      for (const it of sh.items) {
-        const src = [`『${it.title || b.title}』`, it.author, it.page_no ? it.page_no + "쪽" : ""].filter(Boolean).join(", ");
-        h += `<article class="card share-card">
-          <p class="note-big">${esc(it.note).replace(/\n/g, "<br>")}</p>
-          <p class="src">${esc(src)}</p>
-          <div class="who"><span><b>${esc(it.name)}</b> · ${fmtDate(Number(it.created_at))}</span>${it.mine ? `<span class="chip">내 밑줄</span>` : `<button class="link-btn" data-act="report" data-id="${esc(it.id)}">신고</button>`}</div>
-        </article>`;
-      }
+      for (const it of sh.items) h += extCardHTML(it, `<b>${esc(it.name)}</b>${it.mine ? ` <span class="chip">내 밑줄</span>` : ""}${it.page_no ? " · " + esc(it.page_no) + "쪽" : ""}`);
       h += `</div>`;
     }
     return h + `<p style="margin-top:20px"><button class="link-btn" data-act="terms">공유 이용 안내</button></p>`;
@@ -815,14 +825,74 @@ button.cover { padding: 0; cursor: pointer; }
     catch (e) { console.warn("shared load failed", e); S.shared = { bookId, err: errMsg(e), items: [], readers: 0 }; }
     if (S.view === "book" && S.bookId === bookId && !ED.el) render();
   }
+  /* ---------- browse: other readers' shelves ---------- */
+  // a shared highlight from someone else: photo strip + highlighter + memo, read only
+  function extCardHTML(it, metaLeft) {
+    S.ext = S.ext || {};
+    S.ext[it.id] = { id: it.id, imageId: it.share_path ? "sb:" + it.share_path : "", imageUrl: "", strokes: [] };
+    return `<article class="card mark-card ext-card">
+      <div class="meta"><span>${metaLeft}</span><span>${fmtMD(Number(it.created_at))}</span></div>
+      <div class="shot-wrap${it.note ? " has-memo" : ""}">
+        ${it.share_path ? `<canvas data-crop="${esc(it.id)}" aria-label="밑줄 그은 부분"></canvas>` : `<p class="no-photo">사진 없음</p>`}
+        ${it.note ? `<p class="memo-over">${esc(it.note)}</p>` : ""}
+      </div>
+    </article>`;
+  }
+  async function loadBrowse() {
+    S.browse = { loading: true, items: [] }; render();
+    try {
+      S.browse = { items: (await store.browseBooks()) || [] };
+    } catch (e) { console.warn("browse failed", e); S.browse = { err: errMsg(e), items: [] }; }
+    if (S.tab === "browse" && S.view === "library" && !ED.el) render();
+  }
+  function viewBrowse() {
+    const br = S.browse;
+    let h = `<p class="readers">다른 사람들이 공유한 밑줄이 있는 책이에요.</p>`;
+    if (!br || br.loading) return h + `<div class="loading">다른 서재를 불러오는 중…</div>`;
+    if (br.err) return h + `<section class="empty"><h2>불러오지 못했어요</h2><p>${esc(br.err)}</p><button class="btn ghost" data-act="browse-retry">다시 불러오기</button></section>`;
+    if (!br.items.length) return h + `<section class="empty"><h2>아직 둘러볼 서재가 없어요</h2><p>밑줄 화면에서 ‘공유’를 켠 밑줄이 생기면 여기에 보여요.</p></section>`;
+    h += `<div class="grid" style="margin-top:18px">`;
+    for (const it of br.items) {
+      const fake = { coverId: it.cover_path ? "sb:" + it.cover_path : "", title: it.title };
+      h += `<button class="book browse-book" data-act="browse-book" data-id="${esc(it.id)}">
+        <span class="cover">${hasCover(fake) ? coverImg(fake) : `<span class="ph">${esc(it.title || "제목 없는 책")}</span>`}</span>
+        <span class="book-title">${esc(it.title || "제목 없는 책")}</span>
+        <span class="book-owner">${esc(it.name)} · 밑줄 ${it.shared}</span>
+      </button>`;
+    }
+    return h + `</div><p style="margin-top:22px"><button class="link-btn" data-act="terms">공유 이용 안내</button></p>`;
+  }
+  async function openBrowseBook(id) {
+    S.view = "browse-book"; S.browseBook = { loading: true }; render(); window.scrollTo(0, 0);
+    ga.event("browse_book_open");
+    try { const r = await store.browseNotes(id); S.browseBook = r ? r : { err: "이 서재는 더 이상 공개되어 있지 않아요." }; }
+    catch (e) { console.warn("browse book failed", e); S.browseBook = { err: errMsg(e) }; }
+    if (S.view === "browse-book" && !ED.el) render();
+  }
+  function viewBrowseBook() {
+    const bb = S.browseBook || {};
+    let h = header(`<div class="top-row"><button class="back" data-act="browse-back">${backIcon()} 둘러보기</button></div>`);
+    if (bb.loading) return h + `<div class="loading">불러오는 중…</div>`;
+    if (bb.err) return h + `<section class="empty"><h2>볼 수 없어요</h2><p>${esc(bb.err)}</p></section>`;
+    const fake = { coverId: bb.cover_path ? "sb:" + bb.cover_path : "", title: bb.title };
+    h += `<section class="book-head">
+      <div class="cover">${hasCover(fake) ? coverImg(fake) : `<span class="ph" style="font-size:12px">${esc(bb.title || "제목 없는 책")}</span>`}</div>
+      <div><h1>${esc(bb.title || "제목 없는 책")}</h1>${bb.author ? `<div class="meta">${esc(bb.author)}</div>` : ""}<div class="count">${esc(bb.name)}의 밑줄 ${bb.total}개${bb.total > 10 ? " · 무작위 10개" : ""}</div></div>
+    </section>`;
+    if (!bb.notes.length) return h + `<section class="empty"><p>보여 줄 밑줄이 없어요.</p></section>`;
+    h += `<div class="cards" style="margin-top:20px">`;
+    for (const n of bb.notes) h += extCardHTML(n, n.page_no ? esc(n.page_no) + "쪽" : "");
+    return h + `</div>`;
+  }
+
   function termsSheet() {
     openSheet(`<h3>공유 이용 안내</h3>
       <ul class="terms">
-        <li>공유는 직접 켠 밑줄만, 같은 책을 등록한 사람에게만 보여요.</li>
-        <li>공유되는 건 내 메모, 쪽수, 이름, 날짜예요. 페이지 사진과 표지는 공유되지 않아요.</li>
-        <li>메모가 있어야 공유할 수 있고, 한 책에서 10개까지 공유할 수 있어요.</li>
-        <li>인용과 메모에 대한 책임은 올린 사람에게 있어요. 출처(책 제목, 저자, 쪽수)는 자동으로 붙어요.</li>
-        <li>신고가 쌓인 밑줄은 자동으로 숨겨지고, 운영자가 지울 수 있어요.</li>
+        <li>밑줄 화면에서 ‘공유’를 켠 밑줄만 다른 사람에게 보여요. 기본은 꺼져 있어요.</li>
+        <li>공유한 밑줄은 로그인한 사람이 ‘둘러보기’와 같은 책의 ‘같이 읽은 사람들’에서 볼 수 있어요.</li>
+        <li>보이는 것: 형광펜 그은 부분만 잘라 낸 사진, 메모, 쪽수, 날짜, 그 책의 제목·저자·표지, 내 이름. 원본 페이지 사진은 보이지 않아요.</li>
+        <li>둘러보기에서는 한 책마다 무작위로 10개까지 보여요. 다른 사람의 밑줄은 볼 수만 있고 고칠 수 없어요.</li>
+        <li>공유한 사진과 메모에 대한 책임은 올린 사람에게 있어요. 언제든 공유를 끄면 바로 보이지 않아요.</li>
       </ul>
       <button class="btn block" data-act="close">확인</button>`);
   }
@@ -844,7 +914,8 @@ button.cover { padding: 0; cursor: pointer; }
     if (S.mode === "auth") return ga.screen("login", "로그인");
     if (S.mode !== "remote") return;
     if (S.view === "book") return S.bookTab === "shared" ? ga.screen("book-shared", "같이 읽은 사람들") : ga.screen("book", "책 화면");
-    return S.tab === "marks" ? ga.screen("marks", "밑줄 모아보기") : ga.screen("shelf", "책장");
+    if (S.view === "browse-book") return ga.screen("browse-book", "둘러보기 책");
+    return S.tab === "marks" ? ga.screen("marks", "밑줄 모아보기") : S.tab === "browse" ? ga.screen("browse", "둘러보기") : ga.screen("shelf", "책장");
   }
   function render() {
     setTimeout(trackScreen, 0);
@@ -854,9 +925,9 @@ button.cover { padding: 0; cursor: pointer; }
     if (S.mode === "loading") { appEl.innerHTML = `<div class="loading">서재를 여는 중…</div>`; return; }
     if (S.mode === "auth") { appEl.innerHTML = viewAuth(); return; }
     if (S.mode === "remote" && S.loaded.books && S.loaded.pages && !S.books.length && !S.onbOpen && !onbSeen() && !ED.el) setTimeout(() => showOnboarding(false), 0);
-    appEl.innerHTML = S.view === "book" ? viewBook() : viewLibrary();
+    appEl.innerHTML = S.view === "book" ? viewBook() : S.view === "browse-book" ? viewBrowseBook() : viewLibrary();
     hydrateImgs(appEl);
-    appEl.querySelectorAll("canvas[data-crop]").forEach(c => { const p = S.pages.find(p => p.id === c.dataset.crop); if (p) paintCrop(c, p); });
+    appEl.querySelectorAll("canvas[data-crop]").forEach(c => { const p = S.pages.find(p => p.id === c.dataset.crop) || (S.ext && S.ext[c.dataset.crop]); if (p) paintCrop(c, p); });
     if (qFocused) { const q = $("#q"); if (q) { q.focus(); try { q.setSelectionRange(caret, caret); } catch {} } }
     window.scrollTo(0, scrollY);
   }
@@ -1009,9 +1080,8 @@ button.cover { padding: 0; cursor: pointer; }
     const shareEl = $("#ed-share", el), noteEl = $("#ed-n", el);
     const syncShare = () => {
       if (!shareEl) return;
-      const has = !!noteEl.value.trim();
-      shareEl.disabled = !has; if (!has) shareEl.checked = false;
-      $("#ed-share-hint", el).textContent = has ? "메모가 같은 책 독자에게 보여요. 사진은 공유되지 않아요." : "메모를 적으면 공유할 수 있어요";
+      shareEl.disabled = false;
+      $("#ed-share-hint", el).textContent = "켜면 형광펜 그은 부분만 잘라서 메모와 함께 다른 사람에게 보여요";
     };
     if (shareEl) { syncShare(); noteEl.addEventListener("input", syncShare); shareEl.addEventListener("change", () => { ED.dirty = true; }); }
     const del = $("#ed-del", el);
@@ -1079,7 +1149,8 @@ button.cover { padding: 0; cursor: pointer; }
     const el = ED.el;
     const d = { strokes: ED.strokes, pageNo: $("#ed-pg", el).value.trim(), note: $("#ed-n", el).value.trim(), updatedAt: Date.now() };
     const shareEl = $("#ed-share", el);
-    if (shareEl) d.shared = shareEl.checked && !!d.note;
+    const wantShare = shareEl ? shareEl.checked : null;
+    if (wantShare && !ED.strokes.length) toast("형광펜을 그어야 공유할 수 있어요.");
     const strokesChanged = JSON.stringify(ED.strokes) !== ED.orig.strokes;
     if (!ED.strokes.length) d.quote = "";
     const id = ED.id;
@@ -1087,10 +1158,16 @@ button.cover { padding: 0; cursor: pointer; }
     try {
       await store.updatePage(id, d); ED.dirty = false; closeEditor(true);
       ga.event("save_highlight", { strokes: ED.strokes.length, has_note: d.note ? 1 : 0, shared: d.shared ? 1 : 0, color: (ED.strokes[0] && ED.strokes[0].c) || "" });
-      if (d.shared && !ED.page.shared) ga.event("share_on");
-      if (S.shared && S.shared.bookId === S.bookId && "shared" in d) loadShared(S.bookId);
+
       toast("저장했어요.");
-      if (strokesChanged && ED.strokes.length) cropToMarks(id);
+      const nStrokes = ED.strokes.length;
+      const after = (strokesChanged && nStrokes) ? cropToMarks(id) : Promise.resolve();
+      after.then(() => {
+        if (wantShare === null) return;
+        const cur = S.pages.find(x => x.id === id); if (!cur) return;
+        if (wantShare && nStrokes && (!cur.shared || !cur.sharePath || strokesChanged)) setShare(id, true, true);
+        else if ((!wantShare || !nStrokes) && cur.shared) setShare(id, false, true);
+      });
     }
     catch (e) { toast(errMsg(e)); } finally { busy(false); }
   }
@@ -1121,6 +1198,45 @@ button.cover { padding: 0; cursor: pointer; }
     } catch (e) { console.warn("crop failed", e); }
   }
 
+  // what others see when a highlight is shared: just the highlighted part, with the highlighter drawn in
+  async function makeShareStrip(p) {
+    const img = await loadImg(await resolveSrc(p.imageId, p.imageUrl));
+    const W = img.naturalWidth, H = img.naturalHeight;
+    let x0 = W, x1 = 0, y0 = H, y1 = 0;
+    for (const st of p.strokes) for (let i = 0; i < st.p.length; i += 2) {
+      x0 = Math.min(x0, st.p[i] * W); x1 = Math.max(x1, st.p[i] * W); y0 = Math.min(y0, st.p[i + 1] * H); y1 = Math.max(y1, st.p[i + 1] * H);
+    }
+    const lh = Math.max(14, W * 0.032);
+    x0 = Math.max(0, Math.floor(x0 - lh * 0.6)); x1 = Math.min(W, Math.ceil(x1 + lh * 0.6));
+    y0 = Math.max(0, Math.floor(y0 - lh * 0.9)); y1 = Math.min(H, Math.ceil(y1 + lh * 0.9));
+    const c = document.createElement("canvas"); c.width = Math.max(1, x1 - x0); c.height = Math.max(1, y1 - y0);
+    const ctx = c.getContext("2d");
+    ctx.drawImage(img, x0, y0, c.width, c.height, 0, 0, c.width, c.height);
+    ctx.translate(-x0, -y0); drawStrokes(ctx, p.strokes, W, H);
+    return await store.upload(await encode(c, 0.75), "share");
+  }
+  let backfilled = false;
+  async function backfillShares() {
+    if (backfilled || !store || !store.remote) return; backfilled = true;
+    for (const p of S.pages.filter(p => p.shared && !p.sharePath && markCount(p) && p.imageId)) {
+      try { await setShare(p.id, true, true); } catch {}
+    }
+  }
+  async function setShare(id, on, quiet) {
+    const p = S.pages.find(p => p.id === id); if (!p) return;
+    const old = p.sharePath;
+    if (on && !markCount(p)) { toast("형광펜을 그어야 공유할 수 있어요."); return; }
+    if (!quiet) busy(true, on ? "공개하는 중…" : "비공개로 바꾸는 중…");
+    try {
+      if (on) { const up = await makeShareStrip(p); await store.updatePage(id, { shared: true, sharePath: up.id }); ga.event("share_on"); }
+      else { await store.updatePage(id, { shared: false, sharePath: "" }); ga.event("share_off"); }
+      if (old) await store.deleteImage(old);
+      if (!quiet) toast(on ? "공개했어요. 형광펜 부분만 보여요." : "비공개로 바꿨어요.");
+      if (S.shared && S.shared.bookId === p.bookId) loadShared(p.bookId);
+    } catch (e) { console.warn("share failed", e); toast(errMsg(e)); }
+    finally { if (!quiet) busy(false); }
+  }
+
   async function addBookFromFile(file) {
     busy(true, "표지를 올리는 중…");
     try {
@@ -1147,7 +1263,10 @@ button.cover { padding: 0; cursor: pointer; }
     const a = t.dataset.act;
     if (a === "scrim") { if (e.target === t) closeSheet(); return; }
     if (a === "close") return closeSheet();
-    if (a === "tab") { S.tab = t.dataset.tab; render(); return; }
+    if (a === "tab") { S.tab = t.dataset.tab; render(); if (S.tab === "browse") { ga.event("browse_open"); loadBrowse(); } return; }
+    if (a === "browse-retry") return loadBrowse();
+    if (a === "browse-book") return openBrowseBook(t.dataset.id);
+    if (a === "browse-back") { S.view = "library"; S.tab = "browse"; render(); window.scrollTo(0, 0); return; }
     if (a === "logout") return confirmSheet("로그아웃할까요?", "기록은 계정에 그대로 남아 있어요. 다시 로그인하면 이어서 볼 수 있어요.", "로그아웃", async () => { ga.event("logout"); await sb.auth.signOut(); location.reload(); });
     if (a === "migrate") return migrateLocal();
     if (a === "edit-title") { const b = S.books.find(b => b.id === S.bookId); if (b) bookSheet(b, { big: true }); return; }
@@ -1156,6 +1275,7 @@ button.cover { padding: 0; cursor: pointer; }
     if (a === "terms") return termsSheet();
     if (a === "report") { const pid = t.dataset.id; return confirmSheet("이 밑줄을 신고할까요?", "신고한 밑줄은 내 화면에서 바로 사라지고, 신고가 쌓이면 모두에게서 숨겨져요.", "신고하기", async () => { await store.report(pid, ""); ga.event("report"); toast("신고했어요."); await loadShared(S.bookId); }); }
     if (a === "add-book") return addBookChoice();
+    if (a === "toggle-share") { const p = S.pages.find(p => p.id === t.dataset.id); if (p) setShare(p.id, !p.shared); return; }
     if (a === "onboarding") return showOnboarding(true);
     if (a === "calendar") { S.cal = null; ga.event("calendar_open"); return calendarSheet(); }
     if (a === "cal-prev" || a === "cal-next") { const d = new Date(S.cal.y, S.cal.m + (a === "cal-next" ? 1 : -1), 1); S.cal = { y: d.getFullYear(), m: d.getMonth(), sel: null }; return calendarSheet(); }
@@ -1227,6 +1347,7 @@ button.cover { padding: 0; cursor: pointer; }
     const timer = setTimeout(() => { if (!S.loaded.books) { S.err = "서재를 불러오지 못했어요. 연결을 확인하고 페이지를 다시 열어 주세요."; render(); } }, 10000);
     store.subscribe((kind, rows) => {
       S[kind] = rows; S.loaded[kind] = true; if (S.loaded.books) { clearTimeout(timer); S.err = ""; }
+      if (kind === "pages") setTimeout(backfillShares, 1500);
       if (!ED.el) render();
     }, (e) => { clearTimeout(timer); S.err = "서재를 불러오지 못했어요 (" + (e && e.code || "오류") + ")."; render(); });
     render();
