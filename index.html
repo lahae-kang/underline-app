@@ -212,10 +212,16 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
 .memo-over { align-self: end; margin: 0; padding: 7px 10px; color: #fff; font-size: 13px; font-weight: 500; line-height: 1.45;
   background: rgba(24, 24, 24, .58); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
   overflow-wrap: anywhere; white-space: pre-line; position: relative; z-index: 1;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  display: flex; align-items: flex-end; justify-content: space-between; }
 .mark-card .meta > span:first-child { min-width: 0; }
-.tag-over { justify-self: end; align-self: start; margin: 6px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; max-width: 70%; position: relative; z-index: 1; }
-.tag-over span { font-size: 11px; font-weight: 600; color: #fff; background: rgba(24,24,24,.6); padding: 2px 7px; border-radius: 999px; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+.mc-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-title b { font-weight: 600; }
+.shot-bottom { align-self: end; display: grid; position: relative; z-index: 1; min-width: 0; }
+.tag-row { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px; padding: 6px; }
+.tag-row .tg, .tag-row .dt { font-size: 11px; font-weight: 600; color: #fff; background: rgba(24,24,24,.6); padding: 2px 7px; border-radius: 999px; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+.tag-row .dt { font-weight: 500; font-size: 10.5px; opacity: .9; font-variant-numeric: tabular-nums; }
+.memo-over .dt { flex: none; align-self: flex-end; font-size: 10.5px; opacity: .75; font-variant-numeric: tabular-nums; margin-left: 10px; }
+.memo-text { min-width: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .tag-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; align-items: center; }
 .tag-chip { font-size: 12.5px; font-weight: 500; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 .tag-chip.on { background: var(--fg); color: var(--ink-inv); border-color: var(--fg); }
@@ -762,13 +768,17 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
   function markCardHTML(p, inBook) {
     const b = S.books.find(b => b.id === p.bookId) || {};
     const left = inBook ? (p.pageNo ? esc(p.pageNo) + "쪽" : "") : `<b>${esc(titleOf(b))}</b>`;
-    const tags = (p.tags || []).length ? `<span class="tag-over">${p.tags.map(t => `<span>#${esc(t)}</span>`).join("")}</span>` : "";
+    const tags = (p.tags || []).map(t => `<span class="tg">#${esc(t)}</span>`).join("");
+    const date = `<span class="dt">${fmtMD(p.createdAt)}</span>`;
     return `<div class="card mark-card">
-      <div class="meta"><span>${left}</span><span class="mc-right">${fmtMD(p.createdAt)}${markCount(p) ? `<button class="share-pill${p.shared ? " on" : ""}" data-act="toggle-share" data-id="${esc(p.id)}" aria-pressed="${p.shared}">${p.shared ? "공개" : "비공개"}</button>` : ""}</span></div>
+      <div class="meta"><span class="mc-title">${left}</span><span class="mc-right">${markCount(p) ? `<button class="share-pill${p.shared ? " on" : ""}" data-act="toggle-share" data-id="${esc(p.id)}" aria-pressed="${p.shared}">${p.shared ? "공개" : "비공개"}</button>` : ""}</span></div>
       <button class="shot-wrap${p.note ? " has-memo" : ""}" data-act="edit-page" data-id="${esc(p.id)}" aria-label="밑줄 열기">
         <canvas data-crop="${esc(p.id)}" aria-label="밑줄 그은 부분"></canvas>
-        ${tags}
-        ${p.note ? `<p class="memo-over">${esc(p.note)}</p>` : ""}
+        <span class="shot-bottom">
+          ${p.note
+            ? `${tags ? `<span class="tag-row">${tags}</span>` : ""}<span class="memo-over"><span class="memo-text">${esc(p.note)}</span>${date}</span>`
+            : `<span class="tag-row">${tags}${date}</span>`}
+        </span>
       </button>
       ${markCount(p) ? "" : `<span class="nomark">아직 밑줄이 없어요 · 사진을 눌러 긋기</span>`}
     </div>`;
