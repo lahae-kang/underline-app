@@ -222,7 +222,27 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
 .tag-row .dt { font-weight: 500; font-size: 10.5px; opacity: .9; font-variant-numeric: tabular-nums; }
 .memo-over .dt { flex: none; align-self: flex-end; font-size: 10.5px; opacity: .75; font-variant-numeric: tabular-nums; margin-left: 10px; }
 .memo-text { min-width: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.tag-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; align-items: center; }
+.marks-bar { display: flex; align-items: flex-start; gap: 10px; margin-top: 14px; }
+.tag-filter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; min-width: 0; }
+.view-toggle { display: flex; flex: none; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin-left: auto; }
+.view-toggle button { width: 36px; height: 30px; display: grid; place-items: center; color: var(--muted); }
+.view-toggle button[aria-pressed="true"] { background: var(--fg); color: var(--ink-inv); }
+/* two per row: same photo height for every card, overflow is cut */
+.cards.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 10px; }
+.mark-card { grid-template-columns: minmax(0, 1fr); }
+.mark-card > * { min-width: 0; }
+.shot-wrap { grid-template-columns: minmax(0, 1fr); width: 100%; }
+.cards.cols-2 .card { overflow: hidden; }
+.cards.cols-2 .card { padding-bottom: 12px; gap: 6px; }
+.cards.cols-2 .meta { font-size: 11.5px; }
+.cards.cols-2 .share-pill { font-size: 10.5px; padding: 2px 7px; }
+.cards.cols-2 .shot-wrap { height: 150px; overflow: hidden; }
+.cards.cols-2 .shot-wrap canvas { width: 100%; height: 150px; object-fit: cover; }
+.cards.cols-2 .memo-over { font-size: 11.5px; padding: 5px 7px; }
+.cards.cols-2 .memo-text { -webkit-line-clamp: 2; }
+.cards.cols-2 .tag-row { padding: 4px; gap: 3px; }
+.cards.cols-2 .tag-row .tg, .cards.cols-2 .tag-row .dt { font-size: 10px; padding: 1px 6px; }
+.cards.cols-2 .nomark { font-size: 11px; }
 .tag-chip { font-size: 12.5px; font-weight: 500; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 .tag-chip.on { background: var(--fg); color: var(--ink-inv); border-color: var(--fg); }
 .tag-edit { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
@@ -794,17 +814,25 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
       ${markCount(p) ? "" : `<span class="nomark">아직 밑줄이 없어요 · 눌러서 긋기</span>`}
     </button>`;
   }
+  function markView() { if (!S.markView) { try { S.markView = localStorage.getItem("underline-markview") || "1"; } catch { S.markView = "1"; } } return S.markView; }
   function viewMarks() {
-    let h = `<label class="search"><span aria-hidden="true">${searchIcon()}</span><input id="q" type="search" placeholder="메모, 책 제목으로 찾기" value="${esc(S.q)}" autocomplete="off"></label>`;
-    if (!S.loaded.pages) return h + `<div class="loading">밑줄을 불러오는 중…</div>`;
+    if (!S.loaded.pages) return `<div class="loading">밑줄을 불러오는 중…</div>`;
     const all = myTags(); S.tagSel = (S.tagSel || []).filter(t => all.includes(t));
-    if (all.length) h += `<div class="tag-filter" role="group" aria-label="태그로 골라 보기">${all.map(t => `<button class="tag-chip${S.tagSel.includes(t) ? " on" : ""}" data-act="tag-filter" data-tag="${esc(t)}" aria-pressed="${S.tagSel.includes(t)}">#${esc(t)}</button>`).join("")}${S.tagSel.length ? `<button class="link-btn" data-act="tag-clear">모두 보기</button>` : ""}</div>`;
-    const list = S.pages.filter(p => markCount(p) && matches(p) && (!S.tagSel.length || (p.tags || []).some(t => S.tagSel.includes(t)))).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    if (!list.length) return h + `<section class="empty"><h2>${S.q ? "찾는 밑줄이 없어요" : "모아 볼 밑줄이 아직 없어요"}</h2><p>${S.q ? "다른 단어로 찾아보세요. 밑줄 문장을 옮겨 적어 두면 검색에 걸려요." : "책장에서 책을 열고 페이지를 찍어 밑줄을 그어 보세요."}</p></section>`;
-    h += `<div class="cards" style="margin-top:18px">`;
+    const v = markView();
+    let h = `<div class="marks-bar">
+      <div class="tag-filter" role="group" aria-label="태그로 골라 보기">${all.map(t => `<button class="tag-chip${S.tagSel.includes(t) ? " on" : ""}" data-act="tag-filter" data-tag="${esc(t)}" aria-pressed="${S.tagSel.includes(t)}">#${esc(t)}</button>`).join("")}${S.tagSel.length ? `<button class="link-btn" data-act="tag-clear">모두 보기</button>` : ""}</div>
+      <div class="view-toggle" role="group" aria-label="보기 방식">
+        <button data-act="mark-view" data-v="1" aria-pressed="${v === "1"}" aria-label="한 줄에 하나씩"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="7" rx="1.5"/><rect x="4" y="13" width="16" height="7" rx="1.5"/></svg></button>
+        <button data-act="mark-view" data-v="2" aria-pressed="${v === "2"}" aria-label="한 줄에 두 개씩"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></button>
+      </div>
+    </div>`;
+    const list = S.pages.filter(p => markCount(p) && (!S.tagSel.length || (p.tags || []).some(t => S.tagSel.includes(t)))).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    if (!list.length) return h + `<section class="empty"><h2>모아 볼 밑줄이 아직 없어요</h2><p>책장에서 책을 열고 페이지를 찍어 밑줄을 그어 보세요.</p></section>`;
+    h += `<div class="cards cols-${v}" style="margin-top:14px">`;
     for (const p of list) h += markCardHTML(p);
     return h + `</div>`;
   }
+
 
   function viewBook() {
     const b = S.books.find(b => b.id === S.bookId);
@@ -1329,6 +1357,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     if (a === "add-book") return addBookChoice();
     if (a === "tag-filter") { const tg = t.dataset.tag; S.tagSel = (S.tagSel || []).includes(tg) ? S.tagSel.filter(x => x !== tg) : [...(S.tagSel || []), tg]; ga.event("tag_filter"); render(); return; }
     if (a === "tag-clear") { S.tagSel = []; render(); return; }
+    if (a === "mark-view") { S.markView = t.dataset.v; try { localStorage.setItem("underline-markview", S.markView); } catch {} ga.event("mark_view", { cols: S.markView }); render(); return; }
     if (a === "toggle-share") { const p = S.pages.find(p => p.id === t.dataset.id); if (p) setShare(p.id, !p.shared); return; }
     if (a === "onboarding") return showOnboarding(true);
     if (a === "calendar") { S.cal = null; ga.event("calendar_open"); return calendarSheet(); }
