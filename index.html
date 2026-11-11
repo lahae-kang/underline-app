@@ -164,6 +164,7 @@ input, textarea { font: inherit; color: var(--fg); }
 .auth .err { color: var(--fg); font-size: 13.5px; font-weight: 600; min-height: 1.2em; margin: 0; }
 .auth .fine { font-size: 12px; color: var(--muted); margin: 0; }
 .acct { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.acct-link { font-size: 12.5px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .acct button { font-size: 12.5px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
 .migrate { margin-top: 14px; border: 1.5px solid var(--fg); padding: 12px 14px; display: grid; gap: 10px; font-size: 13.5px; }
 .migrate .btn { height: 38px; font-size: 14px; justify-self: start; }
@@ -423,7 +424,7 @@ input, textarea { font: inherit; color: var(--fg); }
     let h = header(`
       <div class="top-row">
         <div class="brand">_밑줄.</div>
-        ${S.user ? `<span class="acct">${esc(S.user)} <button data-act="logout">로그아웃</button></span>` : ""}
+        ${S.user ? `<span class="acct">${esc(S.user)} <label class="acct-link file-btn">백업 가져오기<input type="file" accept="application/json,.json" data-file="backup"></label> <button data-act="logout">로그아웃</button></span>` : ""}
       </div>
       <nav class="tabs" role="tablist">
         <button class="tab" role="tab" data-act="tab" data-tab="books" aria-selected="${S.tab === "books"}">책장</button>
@@ -901,6 +902,7 @@ input, textarea { font: inherit; color: var(--fg); }
   document.addEventListener("input", (e) => { if (e.target.id === "q") { S.q = e.target.value; render(); } });
   document.addEventListener("change", (e) => {
     if (e.target.dataset && e.target.dataset.file === "cover") { const f = e.target.files[0]; e.target.value = ""; if (f) addBookFromFile(f); return; }
+    if (e.target.dataset && e.target.dataset.file === "backup") { const f = e.target.files[0]; e.target.value = ""; if (f) importBackup(f); return; }
     if (e.target.dataset && e.target.dataset.file === "page") { const f = e.target.files[0]; e.target.value = ""; if (f) { S.bookId = e.target.dataset.book; addPageFromFile(f); } return; }
     if (e.target.id === "page-file") { const f = e.target.files[0]; e.target.value = ""; if (f) addPageFromFile(f); }
   });
@@ -941,6 +943,34 @@ input, textarea { font: inherit; color: var(--fg); }
       }
       await local.clear(); S.localCount = 0; render(); toast("이 폰의 기록을 계정으로 옮겼어요.");
     } catch (e) { console.warn("migrate failed", e); toast(errMsg(e)); } finally { busy(false); }
+  }
+  // bring in the backup file made by the earlier Claude-link version
+  async function importBackup(file) {
+    let data;
+    try { data = JSON.parse(await file.text()); } catch { toast("백업 파일을 읽지 못했어요."); return; }
+    if (!data || data.app !== "underline" || !Array.isArray(data.books)) { toast("_밑줄. 백업 파일이 아니에요."); return; }
+    const images = data.images || {}, pages = Array.isArray(data.pages) ? data.pages : [];
+    const toBlob = async (key) => { const d = key && images[key]; if (!d) return null; return await (await fetch(d)).blob(); };
+    const have = new Set(S.books.map(b => (b.title || "") + "|" + b.createdAt));
+    const todo = data.books.filter(b => !have.has((b.title || "") + "|" + (b.createdAt || 0)));
+    if (!todo.length) { toast("이미 모두 가져온 기록이에요."); return; }
+    let done = 0, failed = 0;
+    try {
+      for (const b of todo) {
+        busy(true, `가져오는 중… ${done + 1}/${todo.length}권`);
+        let coverId = "";
+        try { const bl = await toBlob(b.photo); if (bl) coverId = (await store.upload(bl)).id; } catch { failed++; }
+        const newId = await store.addBook({ title: b.title || "", coverId, ocr: b.title ? "done" : "", createdAt: b.createdAt || Date.now() });
+        for (const p of pages.filter(p => p.bookId === b.id)) {
+          let imageId = "";
+          try { const bl = await toBlob(p.photo); if (bl) imageId = (await store.upload(bl)).id; } catch { failed++; }
+          await store.addPage({ bookId: newId, imageId, w: p.w || null, h: p.h || null, strokes: p.strokes || [], pageNo: p.pageNo || "", quote: p.quote || "", note: p.note || "", ocr: p.quote ? "done" : "", createdAt: p.createdAt || Date.now(), updatedAt: p.updatedAt || null });
+        }
+        done++;
+      }
+      toast(`책 ${done}권을 가져왔어요.` + (failed ? ` 사진 ${failed}장은 가져오지 못했어요.` : ""));
+    } catch (e) { console.warn("import failed", e); toast(`${done}권까지 가져왔어요. ` + errMsg(e)); }
+    finally { busy(false); }
   }
   async function countLocal() {
     try { if (!window.indexedDB) return 0; const { books } = await idbStore().dump(); return books.length; } catch { return 0; }
