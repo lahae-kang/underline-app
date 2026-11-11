@@ -204,6 +204,14 @@ button.cover { padding: 0; cursor: pointer; }
 .color-dot { width: 30px; height: 30px; border-radius: 50%; background: var(--dot); border: 2px solid var(--bg); box-shadow: 0 0 0 1.5px var(--line); }
 .color-dot[aria-checked="true"] { box-shadow: 0 0 0 2px var(--fg); }
 .no-photo { margin: 0; padding: 28px 12px; text-align: center; font-size: 13px; color: var(--muted); background: var(--soft); border: 1px dashed var(--line); width: 100%; }
+.shot-wrap { display: grid; background: var(--soft); border: 1px solid var(--line); }
+.shot-wrap > * { grid-area: 1 / 1; }
+.shot-wrap canvas { border: 0; align-self: start; }
+.shot-wrap.has-memo > * { align-self: center; }
+.memo-over { align-self: end; margin: 8px; padding: 10px 12px; color: #111; font-size: 14.5px; font-weight: 600; line-height: 1.5;
+  background: color-mix(in srgb, var(--memo) 62%, transparent); backdrop-filter: blur(1.5px); -webkit-backdrop-filter: blur(1.5px);
+  overflow-wrap: anywhere; white-space: pre-line; position: relative; z-index: 1; }
+@supports not (background: color-mix(in srgb, red 50%, transparent)) { .memo-over { background: rgba(255, 214, 0, .72); } }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 92px); background: var(--fg); color: var(--ink-inv); padding: 10px 16px; border-radius: 999px; font-size: 13.5px; z-index: 60; max-width: calc(100% - 32px); text-align: center; }
 .loading { text-align: center; color: var(--muted); padding: 60px 0; font-size: 14px; }
 .busy { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.35); display: grid; place-items: center; }
@@ -495,6 +503,7 @@ button.cover { padding: 0; cursor: pointer; }
     });
   }
   const titleOf = (b) => (b && b.title) || "제목 없는 책";
+  const fmtMD = (t) => { if (!t) return ""; const d = new Date(t); return String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0"); };
   const fmtDate = (t) => { if (!t) return ""; const d = new Date(t); return d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0"); };
   const markCount = (p) => (p.strokes || []).length;
 
@@ -547,6 +556,18 @@ button.cover { padding: 0; cursor: pointer; }
     const b = S.books.find(b => b.id === p.bookId) || {};
     return [p.note, b.title, b.author, p.pageNo].some(v => String(v || "").toLowerCase().includes(q));
   }
+  // 밑줄 모아보기 card: book title + month.day, memo laid over the photo on a see-through box in the highlight colour
+  function markCardHTML(p) {
+    const b = S.books.find(b => b.id === p.bookId) || {};
+    const col = (MARK_COLORS[(p.strokes && p.strokes[0] && p.strokes[0].c) || "y"] || MARK_COLORS.y).css;
+    return `<button class="card mark-card" data-act="edit-page" data-id="${esc(p.id)}">
+      <div class="meta"><span><b>${esc(titleOf(b))}</b>${p.shared ? ` <span class="chip">공유 중</span>` : ""}</span><span>${fmtMD(p.createdAt)}</span></div>
+      <div class="shot-wrap${p.note ? " has-memo" : ""}">
+        <canvas data-crop="${esc(p.id)}" aria-label="밑줄 그은 부분"></canvas>
+        ${p.note ? `<p class="memo-over" style="--memo:${col}">${esc(p.note)}</p>` : ""}
+      </div>
+    </button>`;
+  }
   function cardHTML(p, showBook) {
     const b = S.books.find(b => b.id === p.bookId) || {};
     const meta = `<div class="meta"><span>${showBook ? `<b>${esc(titleOf(b))}</b> · ` : ""}${p.pageNo ? esc(p.pageNo) + "쪽" : "쪽수 없음"}${p.shared ? ` <span class="chip">공유 중</span>` : ""}</span><span>${fmtDate(p.createdAt)}</span></div>`;
@@ -562,8 +583,8 @@ button.cover { padding: 0; cursor: pointer; }
     if (!S.loaded.pages) return h + `<div class="loading">밑줄을 불러오는 중…</div>`;
     const list = S.pages.filter(p => markCount(p) && matches(p)).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     if (!list.length) return h + `<section class="empty"><h2>${S.q ? "찾는 밑줄이 없어요" : "모아 볼 밑줄이 아직 없어요"}</h2><p>${S.q ? "다른 단어로 찾아보세요. 밑줄 문장을 옮겨 적어 두면 검색에 걸려요." : "책장에서 책을 열고 페이지를 찍어 밑줄을 그어 보세요."}</p></section>`;
-    h += `<div class="section-label"><span>밑줄 ${list.length}쪽</span><span>최근순</span></div><div class="cards">`;
-    for (const p of list) h += cardHTML(p, true);
+    h += `<div class="cards" style="margin-top:18px">`;
+    for (const p of list) h += markCardHTML(p);
     return h + `</div>`;
   }
 
