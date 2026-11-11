@@ -136,9 +136,13 @@ input, textarea { font: inherit; color: var(--fg); }
 .sheet-actions .btn { flex: 1; }
 
 /* Editor */
-.editor { position: fixed; inset: 0; z-index: 35; background: var(--bg); overflow-y: auto; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.editor { position: fixed; inset: 0; z-index: 35; background: var(--bg); overflow-y: auto; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .ed-inner { max-width: 560px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-bottom: 28px; }
-.ed-top { display: flex; align-items: center; justify-content: space-between; padding-block: 10px; gap: 8px; }
+/* top bar (뒤로 · 삭제 · 저장) stays put while the page scrolls */
+.ed-top { position: sticky; top: 0; z-index: 5; background: var(--bg); display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
+  margin-left: calc(-1 * max(16px, env(safe-area-inset-left, 0px))); margin-right: calc(-1 * max(16px, env(safe-area-inset-right, 0px)));
+  border-bottom: 1px solid var(--line); }
 .ed-top .ttl { font-size: 13.5px; color: var(--muted); text-align: center; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .save-btn { height: 36px; padding: 0 16px; font-size: 14px; }
 .stage { background: var(--soft); display: grid; place-items: center; padding: 10px 0; min-height: 200px; }
@@ -198,6 +202,7 @@ button.cover { padding: 0; cursor: pointer; }
 .colors { gap: 10px; align-items: center; }
 .color-dot { width: 30px; height: 30px; border-radius: 50%; background: var(--dot); border: 2px solid var(--bg); box-shadow: 0 0 0 1.5px var(--line); }
 .color-dot[aria-checked="true"] { box-shadow: 0 0 0 2px var(--fg); }
+.no-photo { margin: 0; padding: 28px 12px; text-align: center; font-size: 13px; color: var(--muted); background: var(--soft); border: 1px dashed var(--line); width: 100%; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 92px); background: var(--fg); color: var(--ink-inv); padding: 10px 16px; border-radius: 999px; font-size: 13.5px; z-index: 60; max-width: calc(100% - 32px); text-align: center; }
 .loading { text-align: center; color: var(--muted); padding: 60px 0; font-size: 14px; }
 .busy { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.35); display: grid; place-items: center; }
@@ -281,7 +286,9 @@ button.cover { padding: 0; cursor: pointer; }
   }
   async function paintCrop(canvas, page) {
     try {
-      const img = await cachedImg(await resolveSrc(page.imageId, page.imageUrl));
+      const src = await resolveSrc(page.imageId, page.imageUrl);
+      if (!src) throw new Error("no photo");
+      const img = await cachedImg(src);
       const [a, b] = cropRange(page.strokes);
       const cssW = canvas.clientWidth || 320, dpr = Math.min(2, window.devicePixelRatio || 1);
       const W = Math.round(cssW * dpr), H = Math.round(W * (img.naturalHeight * (b - a)) / img.naturalWidth);
@@ -289,7 +296,10 @@ button.cover { padding: 0; cursor: pointer; }
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, 0, a * img.naturalHeight, img.naturalWidth, (b - a) * img.naturalHeight, 0, 0, W, H);
       drawStrokes(ctx, page.strokes, W, H, a, b - a);
-    } catch { canvas.style.aspectRatio = "3 / 1"; }
+    } catch {
+      const n = document.createElement("p"); n.className = "no-photo"; n.textContent = "사진 없음";
+      canvas.replaceWith(n);
+    }
   }
 
   /* ---------- stores ---------- */
@@ -771,10 +781,11 @@ button.cover { padding: 0; cursor: pointer; }
 
     const img = $("#ed-img", el), cv = $("#ed-cv", el), paper = $("#paper", el);
     img.onload = () => { layout(); };
-    img.onerror = () => toast("사진을 불러오지 못했어요.");
+    const noPhoto = () => { $("#stage", el).innerHTML = `<p class="no-photo">이 페이지는 사진이 없어요.<br>위의 ‘삭제’를 누르고 새로 찍어 주세요.</p>`; };
+    img.onerror = noPhoto;
     (ED.page.imageUrl ? Promise.resolve(ED.page.imageUrl) : resolveSrc(p.imageId, p.imageUrl))
-      .then(src => { ED.page.imageUrl = src; img.src = src; })
-      .catch(() => toast("사진을 불러오지 못했어요."));
+      .then(src => { if (!src) return noPhoto(); ED.page.imageUrl = src; img.src = src; })
+      .catch(noPhoto);
 
     function layout() {
       const nw = img.naturalWidth, nh = img.naturalHeight;
