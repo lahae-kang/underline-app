@@ -12,7 +12,9 @@
 <meta name="apple-mobile-web-app-title" content="_밑줄.">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="icon.svg?v=2" type="image/svg+xml">
+<link rel="icon" href="icon-192.png?v=2" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
 :root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); color-scheme: light; }
@@ -146,8 +148,10 @@ input, textarea { font: inherit; color: var(--fg); }
   border-bottom: 1px solid var(--line); }
 .ed-top .ttl { font-size: 13.5px; color: var(--muted); text-align: center; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .save-btn { height: 36px; padding: 0 16px; font-size: 14px; }
-.stage { background: var(--soft); display: grid; place-items: center; padding: 10px 0; min-height: 200px; }
-.paper { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; max-width: 100%; }
+.stage { background: var(--soft); display: grid; place-items: center; min-height: 200px; overflow: hidden; touch-action: none; position: relative;
+  margin-left: calc(-1 * max(16px, env(safe-area-inset-left, 0px))); margin-right: calc(-1 * max(16px, env(safe-area-inset-right, 0px))); }
+.paper { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; max-width: 100%; transform-origin: 0 0; will-change: transform; }
+.zoom-reset { position: absolute; right: 10px; bottom: 10px; z-index: 2; height: 32px; padding: 0 12px; border-radius: 999px; background: rgba(17,17,17,.78); color: #fff; font-size: 12.5px; font-weight: 600; }
 .paper img { display: block; width: 100%; height: 100%; pointer-events: none; -webkit-user-drag: none; }
 .paper canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
 .tools { display: flex; gap: 6px; padding-block: 12px; justify-content: space-between; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
@@ -1086,7 +1090,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
         <div class="ttl">${esc(titleOf(book))}</div>
         <span class="ed-actions"><button class="btn ghost save-btn" id="ed-del">삭제</button><button class="btn save-btn" id="ed-save">저장</button></span>
       </div>
-      <div class="stage" id="stage"><div class="paper" id="paper"><img id="ed-img" alt="찍은 페이지"><canvas id="ed-cv"></canvas></div></div>
+      <div class="stage" id="stage"><div class="paper" id="paper"><img id="ed-img" alt="찍은 페이지"><canvas id="ed-cv"></canvas></div><button class="zoom-reset" id="zoom-reset" hidden>원래 크기</button></div>
       <div class="tools">
         <div class="tool-group colors" role="radiogroup" aria-label="형광펜 색">
           ${Object.keys(MARK_COLORS).map(k => `<button class="color-dot" data-color="${k}" role="radio" aria-checked="${k === ED.color}" aria-label="${MARK_COLORS[k].name}" style="--dot:${MARK_COLORS[k].css}"></button>`).join("")}
@@ -1117,11 +1121,15 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
 
     function layout() {
       const nw = img.naturalWidth, nh = img.naturalHeight;
-      const maxW = $("#stage", el).clientWidth, maxH = Math.max(320, window.innerHeight * 0.64);
+      // fill the screen width; only very tall photos are limited by height
+      const stage = $("#stage", el);
+      const maxW = stage.clientWidth, maxH = Math.max(360, window.innerHeight - 150);
       const k = Math.min(maxW / nw, maxH / nh);
       ED.W = Math.round(nw * k); ED.H = Math.round(nh * k);
       paper.style.width = ED.W + "px"; paper.style.height = ED.H + "px";
-      const dpr = Math.min(3, window.devicePixelRatio || 1);
+      stage.style.height = ED.H + "px";
+      setZoom(1, 0, 0);
+      const dpr = Math.min(4, (window.devicePixelRatio || 1) * 2); // extra detail for zooming in
       cv.width = Math.round(ED.W * dpr); cv.height = Math.round(ED.H * dpr);
       ED.ctx = cv.getContext("2d"); ED.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       redraw();
@@ -1166,36 +1174,75 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     const del = $("#ed-del", el);
     if (del) del.onclick = () => confirmSheet("이 페이지를 지울까요?", "사진과 밑줄, 메모가 함께 지워지고 되돌릴 수 없어요.", "지우기", async () => { ga.event("delete_page"); await store.deletePage(ED.id); closeEditor(true); toast("페이지를 지웠어요."); });
 
-    // drawing
-    let active = null;
+    // drawing (one finger) and zoom (two fingers)
+    const stageEl = $("#stage", el), zoomBtn = $("#zoom-reset", el);
+    const fingers = new Map(); let active = null, pinch = null;
+    function clampZoom(s, tx, ty) {
+      s = Math.min(5, Math.max(1, s));
+      const sw = stageEl.clientWidth, sh = stageEl.clientHeight, w = ED.W * s, h = ED.H * s;
+      const bx = paper.offsetLeft, by = paper.offsetTop; // where the paper sits at 1x
+      const fit = (t, size, box, base) => size <= box ? (box - size) / 2 - base : Math.min(-base, Math.max(box - size - base, t));
+      return [s, s === 1 ? 0 : fit(tx, w, sw, bx), s === 1 ? 0 : fit(ty, h, sh, by)];
+    }
+    function setZoom(s, tx, ty) {
+      [s, tx, ty] = clampZoom(s, tx, ty); ED.zoom = { s, tx, ty };
+      paper.style.transform = s === 1 ? "" : `translate(${tx}px, ${ty}px) scale(${s})`;
+      if (zoomBtn) zoomBtn.hidden = s === 1;
+    }
+    ED.zoom = { s: 1, tx: 0, ty: 0 };
+    zoomBtn.onclick = (e) => { e.stopPropagation(); setZoom(1, 0, 0); };
+    zoomBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
     const pt = (e) => { const r = cv.getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]; };
-    cv.addEventListener("pointerdown", (e) => {
-      if (active !== null) { ED.cur = null; active = null; redraw(); return; } // second finger cancels
-      e.preventDefault(); active = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch {}
+    const startPinch = () => {
+      const [a, b] = [...fingers.values()], z = ED.zoom;
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, s: z.s, tx: z.tx, ty: z.ty };
+    };
+    stageEl.addEventListener("pointerdown", (e) => {
+      if (!ED.ctx) return;
+      e.preventDefault(); fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      try { stageEl.setPointerCapture(e.pointerId); } catch {}
+      if (fingers.size >= 2) { // second finger: drop the line in progress, start zooming
+        if (ED.cur) { ED.cur = null; redraw(); } active = null; startPinch(); return;
+      }
+      if (pinch) return;
+      active = e.pointerId;
       const [x, y] = pt(e);
       if (ED.tool === "erase") { eraseAt(x, y); return; }
       ED.cur = { t: ED.tool, c: ED.color, p: [x, y] };
     });
-    cv.addEventListener("pointermove", (e) => {
+    stageEl.addEventListener("pointermove", (e) => {
+      if (!fingers.has(e.pointerId)) return;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && fingers.size >= 2) {
+        const [a, b] = [...fingers.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        const s = Math.min(5, Math.max(1, pinch.s * d / pinch.d)), r = s / pinch.s;
+        // keep the spot between the fingers under the fingers
+        const st = stageEl.getBoundingClientRect(), ox = st.left + paper.offsetLeft, oy = st.top + paper.offsetTop;
+        setZoom(s, mx - ox - (pinch.mx - ox - pinch.tx) * r, my - oy - (pinch.my - oy - pinch.ty) * r);
+        return;
+      }
       if (e.pointerId !== active) return;
       const [x, y] = pt(e);
       if (ED.tool === "erase") { eraseAt(x, y); return; }
       if (!ED.cur) return;
       const p = ED.cur.p, lx = p[p.length - 2], ly = p[p.length - 1];
-      if (Math.hypot((x - lx) * ED.W, (y - ly) * ED.H) < 2) return;
+      if (Math.hypot((x - lx) * ED.W, (y - ly) * ED.H) < 2 / ED.zoom.s) return;
       p.push(x, y); redraw();
     });
     const end = (e) => {
+      if (!fingers.delete(e.pointerId)) return;
+      if (pinch) { if (fingers.size === 0) { pinch = null; if (ED.zoom.s < 1.05) setZoom(1, 0, 0); } else if (fingers.size >= 2) startPinch(); return; }
       if (e.pointerId !== active) return; active = null;
       const s = ED.cur; ED.cur = null; if (!s) return;
       const xs = s.p.filter((_, i) => i % 2 === 0), ys = s.p.filter((_, i) => i % 2 === 1);
-      const span = Math.hypot((Math.max(...xs) - Math.min(...xs)) * ED.W, (Math.max(...ys) - Math.min(...ys)) * ED.H);
+      const span = Math.hypot((Math.max(...xs) - Math.min(...xs)) * ED.W, (Math.max(...ys) - Math.min(...ys)) * ED.H) * ED.zoom.s;
       if (span < 8) { redraw(); return; }
       if (ED.straight) { const y = ys.reduce((a, b) => a + b, 0) / ys.length; s.p = [Math.min(...xs), y, Math.max(...xs), y]; }
       s.p = s.p.map(v => Math.round(v * 10000) / 10000);
       ED.strokes.push(s); ED.dirty = true; redraw();
     };
-    cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
+    stageEl.addEventListener("pointerup", end); stageEl.addEventListener("pointercancel", end);
   }
 
   function eraseAt(x, y) {
