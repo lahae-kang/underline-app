@@ -1019,7 +1019,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
         <div class="cover" id="cv">${coverHTML}</div>
         <div class="hint"><span>표지를 정면에서 찍으면 책장이 깔끔해져요.</span>${shootBtn}</div>
       </div>`}
-      <div class="field"><label for="bt">제목</label><input id="bt" maxlength="120" placeholder="${opts.textOnly ? "예: 소년이 온다" : "표지를 보고 제목을 적어 주세요"}" value="${esc(book ? book.title : "")}"></div>
+      <div class="field"><label for="bt">제목${opts.textOnly ? "" : " (선택)"}</label><input id="bt" maxlength="120" placeholder="${opts.textOnly ? "예: 소년이 온다" : "비워 두고 표지만 꽂아도 돼요"}" value="${esc(book ? book.title : "")}"></div>
       <div class="field"><label for="ba">저자 (선택)</label><input id="ba" maxlength="80" placeholder="공유할 때 출처에 함께 표시돼요" value="${esc(book ? (book.author || "") : "")}"></div>
       <div class="sheet-actions"><button class="btn ghost" data-act="close">${opts.first ? "나중에" : "취소"}</button><button class="btn" id="bsave">${editing ? "저장" : "책장에 꽂기"}</button></div>`,
       (el) => {
@@ -1027,10 +1027,11 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
           const f = e.target.files[0]; if (!f) return;
           try { const r = await shrink(f, 600); coverBlob = r.blob; $("#cv", el).innerHTML = `<img src="${URL.createObjectURL(r.blob)}" alt="">`; } catch { toast("사진을 읽지 못했어요."); }
         });
-        if (opts.big || opts.textOnly) setTimeout(() => { const t = $("#bt", el); if (t && !t.value) t.focus(); }, 250);
+        if (opts.textOnly) setTimeout(() => { const t = $("#bt", el); if (t && !t.value) t.focus(); }, 250);
         $("#bsave", el).addEventListener("click", async () => {
           const title = $("#bt", el).value.trim(), author = $("#ba", el).value.trim();
-          if (!title) { toast("제목을 적어 주세요."); $("#bt", el).focus(); return; }
+          // a cover photo is enough; only a book with neither cover nor title needs a title
+          if (!title && !coverBlob && !hasCover(book)) { toast("표지를 찍거나 제목을 적어 주세요."); $("#bt", el).focus(); return; }
           busy(true);
           try {
             const d = { title, author };
