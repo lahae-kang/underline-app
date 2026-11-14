@@ -1,0 +1,25 @@
+-- _밑줄. 첫 화면 A/B 테스트: 가입할 때 어느 그룹(A: 로그인 먼저, B: 안내 → 먼저 써 보기 → 저장할 때 가입)이었는지 기록
+-- 여러 번 실행해도 안전합니다.
+alter table public.profiles add column if not exists ab_group text;
+
+-- ---------------------------------------------------------------------------
+-- 결과 비교용 쿼리 (실행할 필요 없음, 필요할 때 SQL Editor에서 따로 실행)
+--
+-- 1) 그룹별 가입 수, 책 1권 이상 / 페이지 1장 이상 등록한 비율
+-- select pr.ab_group,
+--        count(*)                                                        as signups,
+--        count(*) filter (where b.n > 0)                                 as with_book,
+--        count(*) filter (where p.n > 0)                                 as with_page,
+--        round(100.0 * count(*) filter (where p.n > 0) / count(*), 1)    as page_rate_pct
+--   from public.profiles pr
+--   left join lateral (select count(*) n from public.books b where b.user_id = pr.id) b on true
+--   left join lateral (select count(*) n from public.pages p where p.user_id = pr.id) p on true
+--  where pr.ab_group is not null
+--  group by pr.ab_group order by pr.ab_group;
+--
+-- 2) 사람별로 보기
+-- select pr.ab_group, pr.username, u.created_at::date as joined,
+--        (select count(*) from public.books b where b.user_id = pr.id) as books,
+--        (select count(*) from public.pages p where p.user_id = pr.id) as pages
+--   from public.profiles pr join auth.users u on u.id = pr.id
+--  where pr.ab_group is not null order by u.created_at desc;

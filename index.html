@@ -177,6 +177,19 @@ input, textarea { font: inherit; color: var(--fg); }
 .acct button { font-size: 12.5px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
 .migrate { margin-top: 14px; border: 1.5px solid var(--fg); padding: 12px 14px; display: grid; gap: 10px; font-size: 13.5px; }
 .migrate .btn { height: 38px; font-size: 14px; justify-self: start; }
+/* A/B test group B: short intro instead of the login screen */
+.intro { min-height: calc(100vh - 40px); display: grid; align-content: center; gap: 26px; padding-block: 40px; max-width: 360px; margin: 0 auto; }
+.intro .brand { font-size: 40px; }
+.intro .lead { margin: -12px 0 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+.intro-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; counter-reset: st; }
+.intro-steps li { display: grid; grid-template-columns: 30px minmax(0,1fr); gap: 12px; align-items: start; counter-increment: st; }
+.intro-steps li::before { content: counter(st); width: 30px; height: 30px; border-radius: 50%; background: var(--fg); color: var(--ink-inv); display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+.intro-steps b { display: block; font-size: 15.5px; }
+.intro-steps span { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; line-height: 1.5; }
+.intro .link-btn, .auth .link-btn { justify-self: center; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.save-form { display: grid; gap: 14px; }
+.save-form .err { color: var(--fg); font-size: 13px; font-weight: 600; min-height: 1.1em; margin: 0; }
+.sheet .fine { font-size: 12px; }
 .book-tabs { display: flex; gap: 20px; margin-top: 22px; border-bottom: 1px solid var(--line); }
 .book-tabs .tab { padding-bottom: 8px; margin-bottom: -1px; }
 .readers { font-size: 13px; color: var(--muted); margin: 16px 0 4px; }
@@ -489,21 +502,35 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
   /* ---------- analytics (Google Analytics 4) ---------- */
   // Put the measurement ID (G-XXXXXXXXXX) here. Empty = nothing is sent.
   const GA_ID = "G-CRVC3WHV9W";
+  // A/B test of the first screen: A = login first (as before), B = short intro, use without an account, sign up to save.
+  // Fixed per phone; ?ab=A or ?ab=B forces a group for testing.
+  const AB_KEY = "ul_ab_onboard";
+  const AB = (() => {
+    let g = "";
+    try {
+      const q = (new URLSearchParams(location.search).get("ab") || "").toUpperCase();
+      if (q === "A" || q === "B") { g = q; localStorage.setItem(AB_KEY, g); }
+      else g = localStorage.getItem(AB_KEY) || "";
+      if (g !== "A" && g !== "B") { g = Math.random() < 0.5 ? "A" : "B"; localStorage.setItem(AB_KEY, g); }
+    } catch { if (g !== "A" && g !== "B") g = "A"; }
+    return g;
+  })();
   const ga = (() => {
     if (!GA_ID) return { event() {}, screen() {}, user() {} };
     window.dataLayer = window.dataLayer || [];
     window.gtag = function () { window.dataLayer.push(arguments); };
     gtag("js", new Date());
     gtag("config", GA_ID, { send_page_view: false });
+    gtag("set", "user_properties", { ab_group: AB });
     const sc = document.createElement("script"); sc.async = true;
     sc.src = "https://www.googletagmanager.com/gtag/js?id=" + GA_ID; document.head.appendChild(sc);
     let last = "";
     return {
-      event(name, params) { try { gtag("event", name, params || {}); } catch {} },
+      event(name, params) { try { gtag("event", name, { ab_group: AB, ...(params || {}) }); } catch {} },
       // each screen counts as a page view: 로그인, 책장, 밑줄 모아보기, 책, 같이 읽은 사람들, 밑줄 화면
       screen(key, title) {
         if (key === last) return; last = key;
-        try { gtag("event", "page_view", { page_title: title, page_location: location.origin + location.pathname + "#" + key }); } catch {}
+        try { gtag("event", "page_view", { ab_group: AB, page_title: title, page_location: location.origin + location.pathname + "#" + key }); } catch {}
       },
       // an opaque account id only (never the name), so one person on several devices counts once
       user(id) { try { gtag("set", { user_id: id }); } catch {} }
@@ -754,6 +781,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
         <button class="tab" role="tab" data-act="tab" data-tab="browse" aria-selected="${S.tab === "browse"}">둘러보기</button>
         <button class="cal-btn" data-act="calendar" aria-label="독서 기록 달력">${calIcon()}</button>
       </nav>`);
+    if (S.mode === "local") h += `<div class="migrate save-band"><span>지금은 이 폰에만 저장돼요. 닉네임과 비밀번호를 정하면 기록이 계정에 안전하게 저장돼요.</span><button class="btn" data-act="save-prompt">저장하기</button></div>`;
     if (S.localCount) h += `<div class="migrate"><span>로그인 전에 이 폰에 남긴 책 ${S.localCount}권이 있어요. 계정으로 옮기면 다른 기기에서도 볼 수 있어요.</span><button class="btn" data-act="migrate">계정으로 옮기기</button></div>`;
     if (S.err) h += `<p class="notice">${esc(S.err)}</p>`;
     if (S.tab === "browse") return h + viewBrowse();
@@ -795,7 +823,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     const tags = (p.tags || []).map(t => `<span class="tg">#${esc(t)}</span>`).join("");
     const date = `<span class="dt">${fmtMD(p.createdAt)}</span>`;
     return `<div class="card mark-card">
-      <div class="meta"><span class="mc-title">${left}</span><span class="mc-right">${markCount(p) ? `<button class="share-pill${p.shared ? " on" : ""}" data-act="toggle-share" data-id="${esc(p.id)}" aria-pressed="${p.shared}">${p.shared ? "공개" : "비공개"}</button>` : ""}</span></div>
+      <div class="meta"><span class="mc-title">${left}</span><span class="mc-right">${markCount(p) && S.mode === "remote" ? `<button class="share-pill${p.shared ? " on" : ""}" data-act="toggle-share" data-id="${esc(p.id)}" aria-pressed="${p.shared}">${p.shared ? "공개" : "비공개"}</button>` : ""}</span></div>
       <button class="shot-wrap${p.note ? " has-memo" : ""}" data-act="edit-page" data-id="${esc(p.id)}" aria-label="밑줄 열기">
         <canvas data-crop="${esc(p.id)}" aria-label="밑줄 그은 부분"></canvas>
         <span class="shot-bottom">
@@ -866,6 +894,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     return h;
   }
   function viewShared(b, sh) {
+    if (S.mode !== "remote") return needAccount("같은 책을 읽은 사람들의 밑줄");
     if (!b.title) return `<section class="empty"><h2>제목이 있어야 같은 책을 찾을 수 있어요</h2><p>오른쪽 위 ⋯ 메뉴에서 제목을 적어 주세요.</p></section>`;
     if (!sh || sh.loading) return `<div class="loading">같은 책을 읽은 사람들을 찾는 중…</div>`;
     if (sh.err) return `<section class="empty"><h2>불러오지 못했어요</h2><p>${esc(sh.err)}</p><button class="btn ghost" data-act="shared-retry">다시 불러오기</button></section>`;
@@ -907,7 +936,9 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     } catch (e) { console.warn("browse failed", e); S.browse = { err: errMsg(e), items: [] }; }
     if (S.tab === "browse" && S.view === "library" && !ED.el) render();
   }
+  const needAccount = (what) => `<section class="empty"><h2>저장하면 볼 수 있어요</h2><p>${what}는 닉네임과 비밀번호를 정한 뒤에 볼 수 있어요.</p><button class="btn" data-act="save-prompt">저장하기</button></section>`;
   function viewBrowse() {
+    if (S.mode !== "remote") return needAccount("다른 사람들의 서재");
     const br = S.browse;
     let h = `<p class="readers">다른 사람들이 공유한 밑줄이 있는 책이에요.</p>`;
     if (!br || br.loading) return h + `<div class="loading">다른 서재를 불러오는 중…</div>`;
@@ -957,6 +988,19 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
       </ul>
       <button class="btn block" data-act="close">확인</button>`);
   }
+  function viewIntro() {
+    return `<section class="intro">
+      <div class="brand">_밑줄.</div>
+      <p class="lead">읽다가 마음에 든 문장,<br>페이지 사진으로 모아 두세요.</p>
+      <ol class="intro-steps">
+        <li><div><b>표지를 찍어 책을 꽂아요</b><span>읽고 있는 책의 표지만 찍으면 돼요.</span></div></li>
+        <li><div><b>페이지를 찍고 밑줄을 그어요</b><span>마음에 드는 문장 위로 손가락으로 쓱.</span></div></li>
+        <li><div><b>밑줄 모아보기에서 다시 봐요</b><span>그은 문장들이 날짜순으로 쌓여요.</span></div></li>
+      </ol>
+      <button class="btn block" data-act="intro-start">시작하기</button>
+      <button class="link-btn" data-act="intro-login">이미 계정이 있어요</button>
+    </section>`;
+  }
   function viewAuth() {
     return `<section class="auth">
       <div class="brand">_밑줄.</div>
@@ -966,6 +1010,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
         <p class="err" id="au-err" role="alert">${esc(S.authErr || "")}</p>
         <button class="btn block" type="submit" id="au-go">회원가입/로그인</button>
       </form>
+      ${AB === "B" ? `<button class="link-btn" data-act="guest">로그인 없이 써 보기</button>` : ""}
     </section>`;
   }
 
@@ -973,7 +1018,8 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
   function trackScreen() {
     if (ED.el) return ga.screen("editor", "밑줄 화면");
     if (S.mode === "auth") return ga.screen("login", "로그인");
-    if (S.mode !== "remote") return;
+    if (S.mode === "intro") return ga.screen("intro", "시작 안내");
+    if (S.mode !== "remote" && S.mode !== "local") return;
     if (S.view === "book") return S.bookTab === "shared" ? ga.screen("book-shared", "같이 읽은 사람들") : ga.screen("book", "책 화면");
     if (S.view === "browse-book") return ga.screen("browse-book", "둘러보기 책");
     return S.tab === "marks" ? ga.screen("marks", "밑줄 모아보기") : S.tab === "browse" ? ga.screen("browse", "둘러보기") : ga.screen("shelf", "책장");
@@ -985,6 +1031,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     const caret = qFocused ? document.activeElement.selectionStart : null;
     if (S.mode === "loading") { appEl.innerHTML = `<div class="loading">서재를 여는 중…</div>`; return; }
     if (S.mode === "auth") { appEl.innerHTML = viewAuth(); return; }
+    if (S.mode === "intro") { appEl.innerHTML = viewIntro(); return; }
     if (S.mode === "remote" && S.loaded.books && S.loaded.pages && !S.books.length && !S.onbOpen && !onbSeen() && !ED.el) setTimeout(() => showOnboarding(false), 0);
     appEl.innerHTML = S.view === "book" ? viewBook() : S.view === "browse-book" ? viewBrowseBook() : viewLibrary();
     hydrateImgs(appEl);
@@ -994,12 +1041,14 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
   }
 
   /* ---------- sheets ---------- */
+  let sheetOnClose = null;
   function openSheet(html, onMount) {
+    sheetOnClose = null;
     layer.innerHTML = `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
     hydrateImgs(layer);
     onMount && onMount($(".sheet", layer));
   }
-  const closeSheet = () => { layer.innerHTML = ""; };
+  const closeSheet = () => { layer.innerHTML = ""; const f = sheetOnClose; sheetOnClose = null; if (f) f(); };
 
   // two ways to add a book: a cover photo, or just the title typed in
   function addBookChoice() {
@@ -1023,6 +1072,9 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
       <div class="field"><label for="ba">저자 (선택)</label><input id="ba" maxlength="80" placeholder="공유할 때 출처에 함께 표시돼요" value="${esc(book ? (book.author || "") : "")}"></div>
       <div class="sheet-actions"><button class="btn ghost" data-act="close">${opts.first ? "나중에" : "취소"}</button><button class="btn" id="bsave">${editing ? "저장" : "책장에 꽂기"}</button></div>`,
       (el) => {
+        // group B (no account yet): once the new book is on the shelf, ask to save
+        let savedNew = false;
+        if (S.mode === "local" && (opts.first || !editing)) sheetOnClose = () => { if (opts.first || savedNew) setTimeout(() => savePrompt("add_book"), 400); };
         $("#cover-file", el).addEventListener("change", async (e) => {
           const f = e.target.files[0]; if (!f) return;
           try { const r = await shrink(f, 600); coverBlob = r.blob; $("#cv", el).innerHTML = `<img src="${URL.createObjectURL(r.blob)}" alt="">`; } catch { toast("사진을 읽지 못했어요."); }
@@ -1038,6 +1090,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
             if (coverBlob) { const up = await store.upload(coverBlob, "cover"); d.coverId = up.id; d.coverUrl = up.id ? "" : up.url; }
             if (editing) { await store.updateBook(book.id, d); toast("책 정보를 고쳤어요."); if (S.bookTab === "shared" || S.shared) loadShared(book.id); }
             else { d.createdAt = Date.now(); const id = await store.addBook(d); ga.event("add_book", { method: coverBlob ? "photo" : "text", books_total: S.books.length }); S.view = "book"; S.bookId = id; toast("책장에 꽂았어요."); }
+            if (!editing) savedNew = true;
             closeSheet(); render(); window.scrollTo(0, 0);
           } catch (e) { toast(errMsg(e)); } finally { busy(false); }
         });
@@ -1070,6 +1123,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
       const r = await shrink(file, 1200);
       const up = await store.upload(r.blob, "page");
       ga.event("add_page");
+      if (S.mode === "local" && !S.pagePromptDone) { S.pagePromptDone = true; S.pagePromptPending = true; }
       const id = await store.addPage({ bookId: S.bookId, imageId: up.id, imageUrl: up.id ? "" : up.url, w: r.w, h: r.h, strokes: [], pageNo: "", quote: "", note: "", createdAt: Date.now() });
       busy(false);
       openEditor(id, { imageId: up.id, url: up.url, w: r.w, h: r.h, strokes: [], pageNo: "", quote: "", note: "", bookId: S.bookId, fresh: true });
@@ -1383,6 +1437,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     if (ED.layout) window.removeEventListener("resize", ED.layout);
     if (ED.el) ED.el.remove(); ED.el = null; ED.ctx = null; document.body.style.overflow = "";
     render();
+    if (S.pagePromptPending && S.mode === "local") { S.pagePromptPending = false; setTimeout(() => savePrompt("add_page"), 400); }
   }
 
   /* ---------- events ---------- */
@@ -1391,12 +1446,16 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     const a = t.dataset.act;
     if (a === "scrim") { if (e.target === t) closeSheet(); return; }
     if (a === "close") return closeSheet();
-    if (a === "tab") { S.tab = t.dataset.tab; render(); if (S.tab === "browse") { ga.event("browse_open"); loadBrowse(); } return; }
+    if (a === "tab") { S.tab = t.dataset.tab; render(); if (S.tab === "browse" && S.mode === "remote") { ga.event("browse_open"); loadBrowse(); } return; }
     if (a === "browse-retry") return loadBrowse();
     if (a === "browse-book") return openBrowseBook(t.dataset.id);
     if (a === "browse-back") { S.view = "library"; S.tab = "browse"; render(); window.scrollTo(0, 0); return; }
     if (a === "logout") return confirmSheet("로그아웃할까요?", "기록은 계정에 그대로 남아 있어요. 다시 로그인하면 이어서 볼 수 있어요.", "로그아웃", async () => { ga.event("logout"); await sb.auth.signOut(); location.reload(); });
     if (a === "migrate") return migrateLocal();
+    if (a === "save-prompt") return savePrompt("band");
+    if (a === "intro-start") { ga.event("onboard_start"); introSeen(true); startGuest(); return addBookChoice(); }
+    if (a === "intro-login") return showLogin();
+    if (a === "guest") { introSeen(true); return startGuest(); }
     if (a === "edit-title") { const b = S.books.find(b => b.id === S.bookId); if (b) bookSheet(b, { big: true }); return; }
     if (a === "book-tab") { S.bookTab = t.dataset.tab; render(); if (S.bookTab === "shared" && !(S.shared && S.shared.bookId === S.bookId && !S.shared.err)) loadShared(S.bookId); return; }
     if (a === "shared-retry") return loadShared(S.bookId);
@@ -1428,29 +1487,60 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     if (name.length < 2) return fail("이름을 2자 이상 적어 주세요.");
     if (pw.length < 6) return fail("비밀번호는 6자 이상이어야 해요.");
     const go = $("#au-go"); go.disabled = true; fail("");
-    try {
-      // a name that exists signs in; a new name is created with this password
-      const email = nameToEmail(name);
-      let r = await sb.auth.signInWithPassword({ email, password: pw });
-      if (r.error && /invalid login|credentials/i.test(r.error.message || "")) {
-        const up = await sb.auth.signUp({ email, password: pw, options: { data: { username: name } } });
-        if (up.error && /already registered|already exists/i.test(up.error.message || "")) throw { message: "wrong password" };
-        r = up;
-        if (!up.error) ga.event("sign_up", { method: "name" });
-      } else if (!r.error) ga.event("login", { method: "name" });
-      if (r.error) throw r.error;
-      if (!r.data.session) throw { message: "no session" };
-      S.authErr = ""; enter(r.data.session.user);
-    } catch (err) {
-      const m = String(err && err.message || "");
-      fail(/wrong password|invalid login|credentials/i.test(m) ? "비밀번호가 맞지 않아요. (다른 사람이 쓰는 이름일 수도 있어요)"
-        : /no session/.test(m) ? "가입은 됐지만 로그인하지 못했어요. 한 번 더 눌러 주세요."
-        : /rate|too many/i.test(m) ? "잠시 후 다시 해 주세요."
-        : /fetch|network/i.test(m) ? "인터넷 연결을 확인해 주세요."
-        : "로그인하지 못했어요. 잠시 후 다시 해 주세요.");
-      go.disabled = false;
-    }
+    try { const r = await signInOrUp(name, pw, "login"); S.authErr = ""; enter(r.user, { isNew: r.isNew }); }
+    catch (err) { fail(authErrText(err)); go.disabled = false; }
   });
+  // a name that exists signs in; a new name is created with this password
+  async function signInOrUp(name, pw, from) {
+    const email = nameToEmail(name);
+    let r = await sb.auth.signInWithPassword({ email, password: pw }), isNew = false;
+    if (r.error && /invalid login|credentials/i.test(r.error.message || "")) {
+      const up = await sb.auth.signUp({ email, password: pw, options: { data: { username: name } } });
+      if (up.error && /already registered|already exists/i.test(up.error.message || "")) throw { message: "wrong password" };
+      r = up;
+      if (!up.error) { isNew = true; ga.event("sign_up", { method: "name", from }); }
+    } else if (!r.error) ga.event("login", { method: "name", from });
+    if (r.error) throw r.error;
+    if (!r.data.session) throw { message: "no session" };
+    return { user: r.data.session.user, isNew };
+  }
+  function authErrText(err) {
+    const m = String(err && err.message || "");
+    return /wrong password|invalid login|credentials/i.test(m) ? "비밀번호가 맞지 않아요. (다른 사람이 쓰는 이름일 수도 있어요)"
+      : /no session/.test(m) ? "가입은 됐지만 로그인하지 못했어요. 한 번 더 눌러 주세요."
+      : /rate|too many/i.test(m) ? "잠시 후 다시 해 주세요."
+      : /fetch|network/i.test(m) ? "인터넷 연결을 확인해 주세요."
+      : "로그인하지 못했어요. 잠시 후 다시 해 주세요.";
+  }
+  // group B: "save your records" sheet (after the first book, again after the next page, or from the band)
+  function savePrompt(from) {
+    if (S.mode !== "local" || !sb) return;
+    ga.event("signup_prompt_view", { from });
+    openSheet(`<h3>기록을 저장하려면<br>닉네임과 비밀번호를 정해 주세요</h3>
+      <p>지금은 이 폰에만 있어요. 저장하면 다른 기기에서도 이어서 볼 수 있어요.</p>
+      <form class="save-form" id="save-form" novalidate>
+        <div class="field"><label for="sv-name">닉네임</label><input id="sv-name" autocomplete="username" maxlength="20" placeholder="2~20자"></div>
+        <div class="field"><label for="sv-pw">비밀번호</label><input id="sv-pw" type="password" autocomplete="new-password" maxlength="72" placeholder="6자 이상"></div>
+        <p class="err" id="sv-err" role="alert"></p>
+        <div class="sheet-actions"><button type="button" class="btn ghost" data-act="close">나중에</button><button class="btn" type="submit" id="sv-go">저장하기</button></div>
+      </form>
+      <p class="fine">이미 계정이 있으면 그 닉네임과 비밀번호를 적어 주세요. 이 폰의 기록이 그 계정으로 옮겨져요.</p>`, (el) => {
+      sheetOnClose = () => ga.event("signup_prompt_dismiss", { from });
+      $("#save-form", el).addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = $("#sv-name", el).value.trim(), pw = $("#sv-pw", el).value, err = $("#sv-err", el), go = $("#sv-go", el);
+        if (name.length < 2) { err.textContent = "닉네임을 2자 이상 적어 주세요."; return; }
+        if (pw.length < 6) { err.textContent = "비밀번호는 6자 이상이어야 해요."; return; }
+        go.disabled = true; err.textContent = "";
+        try {
+          const r = await signInOrUp(name, pw, "prompt");
+          sheetOnClose = null; closeSheet();
+          enter(r.user, { isNew: r.isNew, migrate: true });
+        } catch (x) { err.textContent = authErrText(x); go.disabled = false; }
+      });
+    });
+  }
+
   document.addEventListener("input", (e) => { if (e.target.id === "q") { S.q = e.target.value; render(); } });
   document.addEventListener("change", (e) => {
     if (e.target.dataset && e.target.dataset.file === "cover") { const f = e.target.files[0]; e.target.value = ""; if (f) { closeSheet(); addBookFromFile(f); } return; }
@@ -1491,14 +1581,14 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
       for (const b of books) {
         let coverId = "";
         if (b.coverId && b.coverId.startsWith("idb:")) { const bl = await local.blob(b.coverId.slice(4)); if (bl) coverId = (await store.upload(bl)).id; }
-        const newId = await store.addBook({ title: b.title || "", coverId, ocr: b.ocr || "", createdAt: b.createdAt || Date.now() });
+        const newId = await store.addBook({ title: b.title || "", author: b.author || "", coverId, ocr: b.ocr || "", createdAt: b.createdAt || Date.now() });
         for (const p of pages.filter(p => p.bookId === b.id)) {
           let imageId = "";
           if (p.imageId && p.imageId.startsWith("idb:")) { const bl = await local.blob(p.imageId.slice(4)); if (bl) imageId = (await store.upload(bl)).id; }
-          await store.addPage({ bookId: newId, imageId, w: p.w, h: p.h, strokes: p.strokes || [], pageNo: p.pageNo || "", quote: p.quote || "", note: p.note || "", ocr: p.ocr === "pending" ? "failed" : (p.ocr || ""), createdAt: p.createdAt || Date.now() });
+          await store.addPage({ bookId: newId, imageId, w: p.w, h: p.h, strokes: p.strokes || [], pageNo: p.pageNo || "", quote: p.quote || "", note: p.note || "", tags: p.tags || [], ocr: p.ocr === "pending" ? "failed" : (p.ocr || ""), createdAt: p.createdAt || Date.now() });
         }
       }
-      await local.clear(); S.localCount = 0; render(); toast("이 폰의 기록을 계정으로 옮겼어요.");
+      await local.clear(); S.localCount = 0; render(); toast(books.length ? "저장했어요. 이제 계정에 기록이 남아요." : "로그인했어요.");
     } catch (e) { console.warn("migrate failed", e); toast(errMsg(e)); } finally { busy(false); }
   }
   // bring in the backup file made by the earlier Claude-link version
@@ -1532,19 +1622,31 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
   async function countLocal() {
     try { if (!window.indexedDB) return 0; const { books } = await idbStore().dump(); return books.length; } catch { return 0; }
   }
-  function enter(user) {
+  function enter(user, opts = {}) {
     ga.user(user.id);
     S.user = (user.user_metadata && user.user_metadata.username) || "";
-    if (sb && S.user) sb.from("profiles").upsert({ id: user.id, username: S.user, updated_at: new Date().toISOString() }).then(() => {}, () => {});
-    S.mode = "loading"; render();
+    if (sb && S.user) sb.from("profiles").upsert({ id: user.id, username: S.user, updated_at: new Date().toISOString() })
+      // which first screen this person saw (separate call, so a missing column never blocks the name)
+      .then(() => { if (opts.isNew) return sb.from("profiles").update({ ab_group: AB }).eq("id", user.id); })
+      .then(() => {}, () => {});
+    S.mode = "loading"; S.loaded = { books: false, pages: false }; render();
     start(cloudStore(user.id), "remote");
-    countLocal().then(n => { S.localCount = n; if (n && !ED.el) render(); });
+    if (opts.migrate) migrateLocal();
+    else countLocal().then(n => { S.localCount = n; if (n && !ED.el) render(); });
   }
+  const introSeen = (set) => { try { if (set) localStorage.setItem("ul_intro_seen", "1"); return localStorage.getItem("ul_intro_seen") === "1"; } catch { return !!set; } };
+  function showLogin() { S.mode = "auth"; render(); ga.event("login_view"); }
+  function startGuest() { S.loaded = { books: false, pages: false }; start(idbStore(), "local"); }
   async function boot() {
     if (!sb) { S.mode = "local"; S.err = "서버에 연결하지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요."; S.loaded.books = true; render(); return; }
     const { data } = await sb.auth.getSession();
     if (data && data.session) return enter(data.session.user);
-    S.mode = "auth"; render();
+    if (AB === "B") {
+      // already started on this phone (or has books here): straight to the shelf; otherwise the short intro
+      if (introSeen() || await countLocal()) return startGuest();
+      S.mode = "intro"; render(); ga.event("onboard_view"); return;
+    }
+    showLogin();
   }
   boot();
 })();
