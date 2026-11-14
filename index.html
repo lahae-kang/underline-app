@@ -552,6 +552,21 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     };
   })();
 
+  /* ---------- session recordings & heatmaps (Microsoft Clarity) ---------- */
+  // Put the Clarity project ID here. Empty = nothing is loaded.
+  // Typed text, names, memos and page photos are masked (data-clarity-mask) so they never appear in recordings.
+  const CLARITY_ID = "";
+  const clarity = (() => {
+    if (!CLARITY_ID) return () => {};
+    (function (c, l, a, r, i, t, y) {
+      c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments); };
+      t = l.createElement(r); t.async = 1; t.src = "https://www.clarity.ms/tag/" + i;
+      y = l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t, y);
+    })(window, document, "clarity", "script", CLARITY_ID);
+    window.clarity("set", "ab_group", AB);
+    return (...args) => { try { window.clarity(...args); } catch {} };
+  })();
+
   /* ---------- account (Supabase) ---------- */
   const SUPABASE_URL = "https://ftkjrnjstfpunjixnuqc.supabase.co";
   const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0a2pybmpzdGZwdW5qaXhudXFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzODM0MjUsImV4cCI6MjEwOTk1OTQyNX0.UhjmfjquSKJla9oRVBwInredKrlYka-Jo0bh9_BCiEw";
@@ -744,7 +759,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     const d = new Date(p.createdAt || Date.now());
     return `<div class="today-mark" role="note">
       <button class="tm-main" data-act="today-open" data-id="${esc(p.id)}">
-        <span class="tm-thumb"><canvas data-crop="${esc(p.id)}" aria-hidden="true"></canvas></span>
+        <span class="tm-thumb" data-clarity-mask="True"><canvas data-crop="${esc(p.id)}" aria-hidden="true"></canvas></span>
         <span class="tm-text"><b>오늘의 밑줄 · 예전에 넣어 둔 밑줄을 확인해 보세요</b><small>『${esc(titleOf(b))}』 · ${d.getMonth() + 1}월 ${d.getDate()}일에 그었어요</small></span>
       </button>
       <button class="tm-x" data-act="today-close" aria-label="오늘은 그만 보기">×</button>
@@ -778,7 +793,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     const list = sel && days.has(sel) ? days.get(sel) : [];
     openSheet(`<div class="cal-nav"><button class="icon-btn" data-act="cal-prev" aria-label="이전 달">${backIcon()}</button><b>${y}년 ${m + 1}월</b><button class="icon-btn cal-next" data-act="cal-next" aria-label="다음 달">${backIcon()}</button></div>
       <div class="cal-grid"><span class="wd">일</span><span class="wd">월</span><span class="wd">화</span><span class="wd">수</span><span class="wd">목</span><span class="wd">금</span><span class="wd">토</span>${cells}</div>
-      ${list.length ? `<div class="cal-list">${list.map(p => `<button class="cal-shot" data-act="cal-open" data-id="${esc(p.id)}" aria-label="밑줄 열기"><canvas data-crop="${esc(p.id)}"></canvas></button>`).join("")}</div>` : ""}
+      ${list.length ? `<div class="cal-list">${list.map(p => `<button data-clarity-mask="True" class="cal-shot" data-act="cal-open" data-id="${esc(p.id)}" aria-label="밑줄 열기"><canvas data-crop="${esc(p.id)}"></canvas></button>`).join("")}</div>` : ""}
       <button class="btn ghost block" data-act="close" style="border-color:transparent">닫기</button>`);
     layer.querySelectorAll("canvas[data-crop]").forEach(c => { const p = S.pages.find(p => p.id === c.dataset.crop); if (p) paintCrop(c, p); });
   }
@@ -788,7 +803,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     let h = header(`
       <div class="top-row">
         <div class="brand">_밑줄.</div>
-        ${S.user ? `<span class="acct">${esc(S.user)} <button data-act="logout">로그아웃</button></span>` : ""}
+        ${S.user ? `<span class="acct" data-clarity-mask="True">${esc(S.user)} <button data-act="logout">로그아웃</button></span>` : ""}
       </div>
       <nav class="tabs" role="tablist">
         <button class="tab" role="tab" data-act="tab" data-tab="books" aria-selected="${S.tab === "books"}">책장</button>
@@ -839,7 +854,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     const date = `<span class="dt">${fmtMD(p.createdAt)}</span>`;
     return `<div class="card mark-card">
       <div class="meta"><span class="mc-title">${left}</span><span class="mc-right">${markCount(p) && S.mode === "remote" ? `<button class="share-pill${p.shared ? " on" : ""}" data-act="toggle-share" data-id="${esc(p.id)}" aria-pressed="${p.shared}">${p.shared ? "공개" : "비공개"}</button>` : ""}</span></div>
-      <button class="shot-wrap${p.note ? " has-memo" : ""}" data-act="edit-page" data-id="${esc(p.id)}" aria-label="밑줄 열기">
+      <button data-clarity-mask="True" class="shot-wrap${p.note ? " has-memo" : ""}" data-act="edit-page" data-id="${esc(p.id)}" aria-label="밑줄 열기">
         <canvas data-crop="${esc(p.id)}" aria-label="밑줄 그은 부분"></canvas>
         <span class="shot-bottom">
           ${p.note
@@ -854,7 +869,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
   function cardHTML(p, showBook) {
     const b = S.books.find(b => b.id === p.bookId) || {};
     const meta = `<div class="meta"><span>${showBook ? `<b>${esc(titleOf(b))}</b> · ` : ""}${p.pageNo ? esc(p.pageNo) + "쪽" : "쪽수 없음"}${p.shared ? ` <span class="chip">공유 중</span>` : ""}</span><span>${fmtDate(p.createdAt)}</span></div>`;
-    return `<button class="card" data-act="edit-page" data-id="${esc(p.id)}">
+    return `<button class="card" data-clarity-mask="True" data-act="edit-page" data-id="${esc(p.id)}">
       ${meta}
       <canvas data-crop="${esc(p.id)}" aria-label="밑줄 그은 부분"></canvas>
       ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
@@ -938,9 +953,9 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     S.ext[it.id] = { id: it.id, imageId: it.share_path ? "sb:" + it.share_path : "", imageUrl: "", strokes: [] };
     return `<article class="card mark-card ext-card">
       <div class="meta"><span>${metaLeft}</span><span>${fmtMD(Number(it.created_at))}</span></div>
-      <div class="ext-shot">
+      <div class="ext-shot" data-clarity-mask="True">
         ${it.share_path ? `<canvas data-crop="${esc(it.id)}" aria-label="밑줄 그은 부분"></canvas>` : `<p class="no-photo">사진 없음</p>`}
-        ${it.note ? `<p class="ext-memo">${esc(it.note)}</p>` : ""}
+        ${it.note ? `<p class="ext-memo" data-clarity-mask="True">${esc(it.note)}</p>` : ""}
       </div>
     </article>`;
   }
@@ -1020,8 +1035,8 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     return `<section class="auth">
       <div class="brand">_밑줄.</div>
       <form id="auth-form" novalidate>
-        <div class="field"><label for="au-name">이름</label><input id="au-name" autocomplete="username" maxlength="20" value="${esc(S.authName || "")}"></div>
-        <div class="field"><label for="au-pw">비밀번호</label><input id="au-pw" type="password" autocomplete="current-password" maxlength="72"></div>
+        <div class="field"><label for="au-name">이름</label><input id="au-name" data-clarity-mask="True" autocomplete="username" maxlength="20" value="${esc(S.authName || "")}"></div>
+        <div class="field"><label for="au-pw">비밀번호</label><input id="au-pw" data-clarity-mask="True" type="password" autocomplete="current-password" maxlength="72"></div>
         <p class="err" id="au-err" role="alert">${esc(S.authErr || "")}</p>
         <button class="btn block" type="submit" id="au-go">회원가입/로그인</button>
       </form>
@@ -1083,8 +1098,8 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
         <div class="cover" id="cv">${coverHTML}</div>
         <div class="hint"><span>표지를 정면에서 찍으면 책장이 깔끔해져요.</span>${shootBtn}</div>
       </div>`}
-      <div class="field"><label for="bt">제목${opts.textOnly ? "" : " (선택)"}</label><input id="bt" maxlength="120" placeholder="${opts.textOnly ? "예: 소년이 온다" : "비워 두고 표지만 꽂아도 돼요"}" value="${esc(book ? book.title : "")}"></div>
-      <div class="field"><label for="ba">저자 (선택)</label><input id="ba" maxlength="80" placeholder="공유할 때 출처에 함께 표시돼요" value="${esc(book ? (book.author || "") : "")}"></div>
+      <div class="field"><label for="bt">제목${opts.textOnly ? "" : " (선택)"}</label><input id="bt" data-clarity-mask="True" maxlength="120" placeholder="${opts.textOnly ? "예: 소년이 온다" : "비워 두고 표지만 꽂아도 돼요"}" value="${esc(book ? book.title : "")}"></div>
+      <div class="field"><label for="ba">저자 (선택)</label><input id="ba" data-clarity-mask="True" maxlength="80" placeholder="공유할 때 출처에 함께 표시돼요" value="${esc(book ? (book.author || "") : "")}"></div>
       <div class="sheet-actions"><button class="btn ghost" data-act="close">${opts.first ? "나중에" : "취소"}</button><button class="btn" id="bsave">${editing ? "저장" : "책장에 꽂기"}</button></div>`,
       (el) => {
         // group B (no account yet): once the new book is on the shelf, ask to save
@@ -1162,7 +1177,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
         <div class="ttl">${esc(titleOf(book))}</div>
         <span class="ed-actions"><button class="btn ghost save-btn" id="ed-del">삭제</button><button class="btn save-btn" id="ed-save">저장</button></span>
       </div>
-      <div class="stage" id="stage"><div class="paper" id="paper"><img id="ed-img" alt="찍은 페이지"><canvas id="ed-cv"></canvas></div><button class="zoom-reset" id="zoom-reset" hidden>원래 크기</button></div>
+      <div class="stage" id="stage" data-clarity-mask="True"><div class="paper" id="paper"><img id="ed-img" alt="찍은 페이지"><canvas id="ed-cv"></canvas></div><button class="zoom-reset" id="zoom-reset" hidden>원래 크기</button></div>
       <div class="tools">
         <div class="tool-group">
           <button class="tool pick-tool" data-pick="mark" aria-pressed="true"><span class="sw sw-mark"></span>형광펜<span class="caret" aria-hidden="true">▾</span></button>
@@ -1174,12 +1189,12 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
       </div>
       <div class="palette" id="palette" hidden><div class="tool-group colors" role="radiogroup" id="pal-dots"></div><small id="pal-hint"></small></div>
       <div class="ed-fields">
-        <div class="field" style="max-width:140px"><label for="ed-pg">쪽수</label><input id="ed-pg" inputmode="numeric" maxlength="8" placeholder="예: 134" value="${esc(p.pageNo || "")}"></div>
+        <div class="field" style="max-width:140px"><label for="ed-pg">쪽수</label><input id="ed-pg" data-clarity-mask="True" inputmode="numeric" maxlength="8" placeholder="예: 134" value="${esc(p.pageNo || "")}"></div>
         <div class="field"><label for="ed-tag">태그</label>
           <div class="tag-edit" id="ed-tags"></div>
-          <input id="ed-tag" maxlength="12" placeholder="새 태그 적고 엔터 (여러 개 가능)" autocomplete="off" enterkeyhint="done">
+          <input id="ed-tag" data-clarity-mask="True" maxlength="12" placeholder="새 태그 적고 엔터 (여러 개 가능)" autocomplete="off" enterkeyhint="done">
         </div>
-        <div class="field"><label for="ed-n">메모</label><textarea id="ed-n" rows="3" maxlength="2000" placeholder="밑줄 그은 이유">${esc(p.note || "")}</textarea></div>
+        <div class="field"><label for="ed-n">메모</label><textarea id="ed-n" data-clarity-mask="True" rows="3" maxlength="2000" placeholder="밑줄 그은 이유">${esc(p.note || "")}</textarea></div>
         ${store && store.sharedFor ? `<label class="share-row" for="ed-share"><span><b>같은 책 독자에게 공유</b><small id="ed-share-hint"></small></span><input type="checkbox" class="switch-input" id="ed-share" role="switch" ${p.shared ? "checked" : ""}></label>` : ""}
       </div></div>`;
     document.body.appendChild(el); ED.el = el; document.body.style.overflow = "hidden";
@@ -1560,8 +1575,8 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     openSheet(`<h3>기록을 저장하려면<br>닉네임과 비밀번호를 정해 주세요</h3>
       <p>지금은 이 폰에만 있어요. 저장하면 다른 기기에서도 이어서 볼 수 있어요.</p>
       <form class="save-form" id="save-form" novalidate>
-        <div class="field"><label for="sv-name">닉네임</label><input id="sv-name" autocomplete="username" maxlength="20" placeholder="2~20자"></div>
-        <div class="field"><label for="sv-pw">비밀번호</label><input id="sv-pw" type="password" autocomplete="new-password" maxlength="72" placeholder="6자 이상"></div>
+        <div class="field"><label for="sv-name">닉네임</label><input id="sv-name" data-clarity-mask="True" autocomplete="username" maxlength="20" placeholder="2~20자"></div>
+        <div class="field"><label for="sv-pw">비밀번호</label><input id="sv-pw" data-clarity-mask="True" type="password" autocomplete="new-password" maxlength="72" placeholder="6자 이상"></div>
         <p class="err" id="sv-err" role="alert"></p>
         <div class="sheet-actions"><button type="button" class="btn ghost" data-act="close">나중에</button><button class="btn" type="submit" id="sv-go">저장하기</button></div>
       </form>
@@ -1664,7 +1679,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     try { if (!window.indexedDB) return 0; const { books } = await idbStore().dump(); return books.length; } catch { return 0; }
   }
   function enter(user, opts = {}) {
-    ga.user(user.id);
+    ga.user(user.id); clarity("identify", user.id); // the opaque account id only, never the name
     S.user = (user.user_metadata && user.user_metadata.username) || "";
     if (sb && S.user) sb.from("profiles").upsert({ id: user.id, username: S.user, updated_at: new Date().toISOString() })
       // which first screen this person saw (separate call, so a missing column never blocks the name)
