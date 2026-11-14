@@ -220,6 +220,13 @@ button.cover { padding: 0; cursor: pointer; }
 .colors { gap: 10px; align-items: center; }
 .color-dot { width: 30px; height: 30px; border-radius: 50%; background: var(--dot); border: 2px solid var(--bg); box-shadow: 0 0 0 1.5px var(--line); }
 .color-dot[aria-checked="true"] { box-shadow: 0 0 0 2px var(--fg); }
+.pick-tool .sw { width: 16px; border-radius: 2px; flex: none; }
+.pick-tool .sw-mark { height: 9px; opacity: .8; }
+.pick-tool .sw-pen { height: 3px; }
+.pick-tool .caret { font-size: 10px; opacity: 0; margin-left: -2px; }
+.pick-tool[aria-pressed="true"] .caret { opacity: .8; }
+.palette { display: grid; gap: 8px; padding-block: 12px; border-bottom: 1px solid var(--line); }
+.palette small { font-size: 12px; color: var(--muted); }
 .no-photo { margin: 0; padding: 28px 12px; text-align: center; font-size: 13px; color: var(--muted); background: var(--soft); border: 1px dashed var(--line); width: 100%; }
 .shot-wrap { display: grid; background: var(--soft); border: 1px solid var(--line); }
 .shot-wrap > * { grid-area: 1 / 1; }
@@ -390,13 +397,21 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     b: { name: "하늘", ink: "rgba(70,165,255,.38)", css: "#46a5ff" },
     o: { name: "주황", ink: "rgba(255,145,40,.42)", css: "#ff9128" }
   };
+  // pen: thin solid line (red by default)
+  const PEN_COLORS = {
+    r: { name: "빨강", css: "#e5383b" },
+    k: { name: "검정", css: "#111111" },
+    b: { name: "파랑", css: "#1f6feb" },
+    g: { name: "초록", css: "#2a9d4b" },
+    v: { name: "보라", css: "#8a4bd6" }
+  };
   function drawStrokes(ctx, strokes, W, H, y0 = 0, ySpan = 1) {
     for (const s of strokes || []) {
       const p = s.p; if (!p || p.length < 4) continue;
       ctx.save();
       ctx.lineCap = "round"; ctx.lineJoin = "round";
       if (s.t === "mark") { ctx.strokeStyle = (MARK_COLORS[s.c] || MARK_COLORS.y).ink; ctx.lineWidth = Math.max(8, W * 0.032); ctx.globalCompositeOperation = "multiply"; }
-      else { ctx.strokeStyle = "#111"; ctx.lineWidth = Math.max(2, W * 0.0045); }
+      else { ctx.strokeStyle = (PEN_COLORS[s.c] || PEN_COLORS.k).css; ctx.lineWidth = Math.max(2.5, W * 0.006); }
       ctx.beginPath();
       for (let i = 0; i < p.length; i += 2) {
         const x = p[i] * W, y = ((p[i + 1] - y0) / ySpan) * H;
@@ -1131,8 +1146,10 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
   }
 
   /* ---------- editor ---------- */
-  let savedColor = "y"; try { savedColor = localStorage.getItem("underline-color") || "y"; } catch {}
-  const ED = { el: null, id: null, page: null, strokes: [], tool: "mark", color: MARK_COLORS[savedColor] ? savedColor : "y", straight: false, cur: null, W: 0, H: 0, ctx: null, dirty: false };
+  // each person's last colour per tool is remembered on their phone (highlighter: yellow, pen: red until changed)
+  let savedColor = "y", savedPen = "r";
+  try { savedColor = localStorage.getItem("underline-color") || "y"; savedPen = localStorage.getItem("underline-pen-color") || "r"; } catch {}
+  const ED = { el: null, id: null, page: null, strokes: [], tool: "mark", color: MARK_COLORS[savedColor] ? savedColor : "y", penColor: PEN_COLORS[savedPen] ? savedPen : "r", straight: false, cur: null, W: 0, H: 0, ctx: null, dirty: false };
 
   function openEditor(id, preset) {
     const p = preset || S.pages.find(p => p.id === id); if (!p) return;
@@ -1147,13 +1164,15 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
       </div>
       <div class="stage" id="stage"><div class="paper" id="paper"><img id="ed-img" alt="찍은 페이지"><canvas id="ed-cv"></canvas></div><button class="zoom-reset" id="zoom-reset" hidden>원래 크기</button></div>
       <div class="tools">
-        <div class="tool-group colors" role="radiogroup" aria-label="형광펜 색">
-          ${Object.keys(MARK_COLORS).map(k => `<button class="color-dot" data-color="${k}" role="radio" aria-checked="${k === ED.color}" aria-label="${MARK_COLORS[k].name}" style="--dot:${MARK_COLORS[k].css}"></button>`).join("")}
+        <div class="tool-group">
+          <button class="tool pick-tool" data-pick="mark" aria-pressed="true"><span class="sw sw-mark"></span>형광펜<span class="caret" aria-hidden="true">▾</span></button>
+          <button class="tool pick-tool" data-pick="pen" aria-pressed="false"><span class="sw sw-pen"></span>펜<span class="caret" aria-hidden="true">▾</span></button>
         </div>
         <div class="tool-group">
           <button class="tool" id="t-undo" aria-label="되돌리기">${undoIcon()} 이전으로</button>
         </div>
       </div>
+      <div class="palette" id="palette" hidden><div class="tool-group colors" role="radiogroup" id="pal-dots"></div><small id="pal-hint"></small></div>
       <div class="ed-fields">
         <div class="field" style="max-width:140px"><label for="ed-pg">쪽수</label><input id="ed-pg" inputmode="numeric" maxlength="8" placeholder="예: 134" value="${esc(p.pageNo || "")}"></div>
         <div class="field"><label for="ed-tag">태그</label>
@@ -1195,10 +1214,32 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     el.querySelectorAll("[data-tool]").forEach(b => b.onclick = () => { ED.tool = b.dataset.tool; el.querySelectorAll("[data-tool]").forEach(x => x.setAttribute("aria-pressed", x === b)); });
     $("#t-undo", el).onclick = () => { if (ED.strokes.length) { ED.strokes.pop(); ED.dirty = true; redraw(); } };
     $("#ed-close", el).onclick = () => closeEditor();
-    el.querySelectorAll("[data-color]").forEach(b => b.onclick = () => {
-      ED.color = b.dataset.color; try { localStorage.setItem("underline-color", ED.color); } catch {}
-      el.querySelectorAll("[data-color]").forEach(x => x.setAttribute("aria-checked", x === b));
+    // tools: tap to pick 형광펜 / 펜, tap the picked one again to choose its colour
+    const pal = $("#palette", el), palDots = $("#pal-dots", el);
+    const syncTools = () => {
+      el.querySelectorAll("[data-pick]").forEach(b => b.setAttribute("aria-pressed", b.dataset.pick === ED.tool));
+      $(".sw-mark", el).style.background = MARK_COLORS[ED.color].css;
+      $(".sw-pen", el).style.background = PEN_COLORS[ED.penColor].css;
+    };
+    const openPalette = () => {
+      const pen = ED.tool === "pen", set = pen ? PEN_COLORS : MARK_COLORS, cur = pen ? ED.penColor : ED.color;
+      palDots.setAttribute("aria-label", pen ? "펜 색" : "형광펜 색");
+      palDots.innerHTML = Object.keys(set).map(k => `<button class="color-dot" data-color="${k}" role="radio" aria-checked="${k === cur}" aria-label="${set[k].name}" style="--dot:${set[k].css}"></button>`).join("");
+      $("#pal-hint", el).textContent = (pen ? "펜" : "형광펜") + " 색을 골라요. 고른 색이 다음부터 기본이 돼요.";
+      pal.hidden = false;
+    };
+    el.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => {
+      if (ED.tool === b.dataset.pick) { if (pal.hidden) openPalette(); else pal.hidden = true; return; }
+      ED.tool = b.dataset.pick; pal.hidden = true; syncTools();
     });
+    palDots.addEventListener("click", (e) => {
+      const d = e.target.closest("[data-color]"); if (!d) return;
+      if (ED.tool === "pen") { ED.penColor = d.dataset.color; try { localStorage.setItem("underline-pen-color", ED.penColor); } catch {} }
+      else { ED.color = d.dataset.color; try { localStorage.setItem("underline-color", ED.color); } catch {} }
+      ga.event("tool_color", { tool: ED.tool, color: d.dataset.color });
+      pal.hidden = true; syncTools();
+    });
+    ED.tool = "mark"; syncTools();
     $("#ed-save", el).onclick = saveEditor;
     ["ed-pg", "ed-n"].forEach(i => $("#" + i, el).addEventListener("input", () => { ED.dirty = true; }));
     const shareEl = $("#ed-share", el), noteEl = $("#ed-n", el);
@@ -1263,7 +1304,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
       active = e.pointerId;
       const [x, y] = pt(e);
       if (ED.tool === "erase") { eraseAt(x, y); return; }
-      ED.cur = { t: ED.tool, c: ED.color, p: [x, y] };
+      ED.cur = { t: ED.tool, c: ED.tool === "pen" ? ED.penColor : ED.color, p: [x, y] };
     });
     stageEl.addEventListener("pointermove", (e) => {
       if (!fingers.has(e.pointerId)) return;
@@ -1332,7 +1373,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
     const d = { strokes: ED.strokes, pageNo: $("#ed-pg", el).value.trim(), note: $("#ed-n", el).value.trim(), tags: ED.tags || [], updatedAt: Date.now() };
     const shareEl = $("#ed-share", el);
     const wantShare = shareEl ? shareEl.checked : null;
-    if (wantShare && !ED.strokes.length) toast("형광펜을 그어야 공유할 수 있어요.");
+    if (wantShare && !ED.strokes.length) toast("밑줄을 그어야 공유할 수 있어요.");
     const strokesChanged = JSON.stringify(ED.strokes) !== ED.orig.strokes;
     if (!ED.strokes.length) d.quote = "";
     const id = ED.id;
@@ -1407,7 +1448,7 @@ button.shot-wrap { padding: 0; width: 100%; text-align: left; cursor: pointer; }
   async function setShare(id, on, quiet) {
     const p = S.pages.find(p => p.id === id); if (!p) return;
     const old = p.sharePath;
-    if (on && !markCount(p)) { toast("형광펜을 그어야 공유할 수 있어요."); return; }
+    if (on && !markCount(p)) { toast("밑줄을 그어야 공유할 수 있어요."); return; }
     if (!quiet) busy(true, on ? "공개하는 중…" : "비공개로 바꾸는 중…");
     try {
       if (on) { const up = await makeShareStrip(p); await store.updatePage(id, { shared: true, sharePath: up.id }); ga.event("share_on"); }
